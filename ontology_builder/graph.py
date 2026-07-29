@@ -210,7 +210,7 @@ def build_graph(
     # HistorianTag's "tag metadata, not raw values" pattern. Without this,
     # the agent could only infer a mis-set-limit/chattering-alarm conclusion
     # *behaviorally* from am_alarm_events.csv's timing/value pattern (which
-    # works, see docs/CHAT_RAG.md Sec 6's Q5 live test) but could never cite
+    # works, see docs/CHAT_AGENT.md Sec 6's Q5 live test) but could never cite
     # the actual configured HH/H/L/LL limit or deadband/hysteresis value as
     # hard evidence the way it cites work order IDs or setpoint values
     # elsewhere. `deadband` matters most: TK-201's S5 scenario has a real

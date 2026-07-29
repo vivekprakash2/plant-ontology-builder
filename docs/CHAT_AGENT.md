@@ -1,6 +1,6 @@
 # Chat / Reasoning Agent (Stage 3 "ask" + Stage 4 "reason")
 
-Plain-language explainer of the chat/RAG stack — how a natural-language question turns into a
+Plain-language explainer of the chat agent stack — how a natural-language question turns into a
 grounded, evidence-cited answer in the UI. Counterpart to [ENTITY_RESOLUTION.md](ENTITY_RESOLUTION.md)
 (Stage 1) and [ONTOLOGY.md](ONTOLOGY.md) (Stage 2/3 graph) — this doc covers everything downstream of
 the graph: the reasoning agent, the LLM providers, the HTTP API, and the frontend that renders it.
@@ -355,7 +355,7 @@ Vanilla HTML/CSS/JS, no build step, no framework. Two-pane layout (`.workspace` 
   the free-text textarea + Ask button — Enter submits, Shift+Enter inserts a newline.
 - **Right: `.explorer-panel`** — the **Plant Ontology Explorer**, a persistent, always-browsable view of
   the *whole* knowledge graph (not scoped to the current answer), independent of chat. This is the direct
-  answer to "how do we make the graph useful while chat/RAG runs" — see below.
+  answer to "how do we make the graph useful while the chat agent runs" — see below.
 
 **Security posture (unchanged from before the redesign):** all dynamic content — chat bubbles, Markdown,
 timeline/evidence cards, SVG trend charts, and every graph node/edge/inspector field — is built via
@@ -542,8 +542,9 @@ Not blocking for the current rubric, but relevant if this session extends the ch
   it is not semantic retrieval/embeddings and has no ranking beyond first-match scan order. At larger scale,
   this should likely become indexed search (and possibly embeddings-backed retrieval) to improve recall and
   relevance for paraphrased queries.
-- **Tool set is still intentionally narrow (6 tools):** `list_assets`, `get_asset_context`,
-  `get_historian_trend`, `get_related_assets`, `search_evidence`, `get_plant_status_summary`.
+- **Tool set is still intentionally narrow (7 tools, 6 of which query the KG):** `list_assets`,
+  `get_asset_context`, `get_historian_trend`, `get_related_assets`, `search_evidence`,
+  `get_plant_status_summary` (plus `write_plan`, which is UI-only and never touches the graph).
   `get_related_assets` only exposes `FEEDS`/`COOLS`/`SUPPLIES_UTILITY` edges, and there is still no generic
   "traverse N hops of any edge type" tool. New question patterns currently need either a new `_dispatch`
   branch (deterministic mode) or rely on the LLM composing the current tools (agentic mode) — the latter
@@ -551,10 +552,12 @@ Not blocking for the current rubric, but relevant if this session extends the ch
 - **`_dispatch`'s `_ALIASES` table is hand-maintained** — a new physical asset needs a manual alias entry to
   be reachable via the deterministic fallback; the agentic path already handles new assets/systems with zero
   code changes (via `list_assets`) once they're in the graph. Low priority since the LLM path is preferred.
-- **No streaming/SSE responses** — `/api/chat` is a single blocking POST; agentic answers can take
-  30-90+ seconds (multiple sequential tool-call round trips to a large model), during which the UI shows a
-  pending assistant bubble ("Thinking..."). A streaming response would still improve perceived latency but
-  wasn't implemented.
+- **Live streaming exists now, but isn't atomic.** `stream_answer()` can yield several plan/tool_call/
+  tool_result events to the client before a later turn in the same agentic loop fails — those already-sent
+  events can't be un-sent, so a user could briefly see live tool-call activity followed by a deterministic-
+  fallback final answer that doesn't match what was just shown. Rare (only on a mid-loop failure after
+  earlier turns succeeded), and arguably honest behavior for a stream vs. a single atomic batch response,
+  but worth knowing about.
 - **No formal prompt-injection hardening** (see §5) — acceptable for a local single-user demo, flagged for
   any future multi-user/external exposure.
 - **No MCP (Model Context Protocol) wrapping** — the tool-calling design already matches MCP's shape

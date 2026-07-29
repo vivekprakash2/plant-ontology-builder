@@ -89,7 +89,7 @@ considered and deliberately decided *against*, so they aren't re-litigated from 
   Original state: a fixed single-result dashboard (preset questions + summary card + timeline + evidence +
   relationship graph) modeled on `ui-prototype/`, felt too restrictive for open-ended questions — it
   implicitly steered toward the demo scenarios' shape rather than free exploration. First redesign
-  (2026-07-29, see `docs/CHAT_RAG.md` §4) replaced it with a two-pane layout: a real chat thread (left) +
+  (2026-07-29, see `docs/CHAT_AGENT.md` §4) replaced it with a two-pane layout: a real chat thread (left) +
   a persistent, always-browsable force-directed Plant Ontology Explorer (right, backed by a new
   `GET /api/graph` endpoint), with answers auto-highlighting their resolved entity/evidence in the graph.
   Verified functionally correct end-to-end (chat thread, category filters, pan/zoom, node inspector,
@@ -109,16 +109,11 @@ considered and deliberately decided *against*, so they aren't re-litigated from 
   hierarchical/tree view by unit, a table/list view with drill-down, or a simpler "asset cards" grid);
   and getting direct feedback on *why* the explorer doesn't feel useful (unclear value proposition? too
   cluttered? wrong information density? no clear task it helps with?) before iterating further blindly.
-  Update `docs/CHAT_RAG.md` §4 in the same turn as any future work here, per its standing maintenance rule.
+  Update `docs/CHAT_AGENT.md` §4 in the same turn as any future work here, per its standing maintenance rule.
 
 ### Other previously-noted ideas (carried over, still open)
 
-- **Streaming/SSE responses in the chat UI**, so a long agentic answer (30–90+ seconds with Claude Opus)
-  streams incrementally instead of the UI waiting for the full response. **Partially addressed 2026-07-29**
-  by the graph-walk feature below, but that's a *post-hoc replay* of an already-finished answer's trace, not
-  real streaming — `/api/chat` is still a single synchronous response and `server.py` is still a
-  single-threaded stdlib `HTTPServer`. True incremental streaming still needs both an async/chunked server
-  and `_run_agentic` restructured to yield per-turn events; still open.
+(none currently -- the streaming/SSE idea below was implemented and moved to "Implemented".)
 
 ### Process-topology extraction: real-world prose sourcing
 
@@ -152,7 +147,7 @@ neither built:
   `docs/ONTOLOGY.md`'s "Step 5" and "Autonomous process-topology extraction" sections.
 - **`docs/ONTOLOGY.md`** itself — a plain-language explainer of the knowledge-graph/ontology stage (graph
   shape, caching, quirks), counterpart to `docs/ENTITY_RESOLUTION.md`.
-- **`docs/CHAT_RAG.md`** itself — a plain-language explainer of the chat/RAG/reasoning stage, counterpart to
+- **`docs/CHAT_AGENT.md`** itself — a plain-language explainer of the chat-agent/reasoning stage, counterpart to
   `docs/ENTITY_RESOLUTION.md`/`docs/ONTOLOGY.md`.
 - **`search_evidence(query, systems=[...])` — free-text search over record content**, added as a new agentic
   tool in `agent.py` (`_tool_search_evidence`, `_SEARCHABLE_NODE_LABELS`/`_SEARCH_FIELDS`). Substring-matches
@@ -164,7 +159,7 @@ neither built:
   and recent APM health events across ALL assets (capped 30/30/15), each resolved to its owning asset via
   the new `_asset_for_record()` helper. Both tools' results are wired into `_primary_asset_id_from_trace()`
   (fallback asset resolution for the UI panel) and `_flatten_evidence()` (so their matches render as normal
-  evidence cards/timeline entries) — see `docs/CHAT_RAG.md` §1b/§3. Verified end-to-end against the real
+  evidence cards/timeline entries) — see `docs/CHAT_AGENT.md` §1b/§3. Verified end-to-end against the real
   loaded graph (30 active alarms / 2 open work orders / 3 health events returned, correctly asset-attributed)
   and the full 13/13 test suite still passes.
 - **Alarm limit/deadband configuration (`am_config.json`'s `limits`/`deadband` fields) is now ingested and
@@ -179,7 +174,7 @@ neither built:
   limit/deadband as hard evidence. Live-verified after the fix: TK-201's answer now cites "H=78.5%, deadband
   0.1%" against an observed ~0.3% swing, both deterministically and agentically (the agentic answer also
   quoted the config's own `recommended_action` text, "suspected mis-set"). See `docs/ONTOLOGY.md` §3b and
-  `docs/CHAT_RAG.md` §6 for the full story. Full 13/13 test suite still passes.
+  `docs/CHAT_AGENT.md` §6 for the full story. Full 13/13 test suite still passes.
 - **Animated graph walk** (2026-07-29): `agent.py`'s `build_graph_walk()` (+ `_walk_step_for_tool_call()`)
   turns the answer's already-collected evidence/tool-call trace into an ordered `[{label, node_ids}, ...]`
   sequence (one step per tool call in agentic mode, exact call order; one step per gathered evidence item in
@@ -189,7 +184,26 @@ neither built:
   what answers "where is the reasoning currently focused", raised while discussing whether a Neo4j/vis.js-
   style graph walk was feasible on this project's custom in-memory `KnowledgeGraph`. Verified end-to-end
   against the live server: a real question returned 6 correctly-ordered steps mapped to real graph node ids.
-  **Explicitly not live/streaming** — see the SSE bullet above, still open. See `docs/CHAT_RAG.md` §3/§4b.
+  **Explicitly not live/streaming** at the time — see the next entry, which closed that gap the same day.
+  See `docs/CHAT_AGENT.md` §3/§4b.
+- **Live streaming chat (plan + tool-call feed + live graph walk)** (2026-07-29): closes the "Streaming/SSE
+  responses in the chat UI" idea above for real, not just the graph-walk replay. `agent.py`'s
+  `_run_agentic_events()` (a generator; `_run_agentic` now just drains it for non-streaming callers) yields
+  `plan`/`tool_call`/`tool_result` events live as the agentic loop runs, plus a new `write_plan` tool (model
+  calls it first with a 3-6 step investigation plan, updates it as steps complete) so the UI can render a
+  real checklist, not just an inferred one. `server.py`'s `/api/chat` is now a `text/event-stream` response
+  (`stream_answer()`) instead of a single blocking JSON POST -- still single-threaded stdlib `HTTPServer`,
+  but SSE only needs a kept-open connection with flushed writes, no async framework required.
+  `frontend/app.js` reads the stream via `ReadableStream` (not `EventSource`, which can't send a POST body),
+  rendering a live plan checklist + tool-call trace chips, and a new `liveWalkStep()`/`liveWalkFinish()` pair
+  highlights graph nodes **as each tool call actually happens** rather than replaying afterward --
+  `animateGraphWalk()`'s replay is now only a fallback for the deterministic (no-LLM) path, which has no
+  live events to show. Verified end-to-end via both a raw SSE curl trace and in-browser screenshots: plan
+  steps update live (pending → in_progress → done), trace chips accumulate correctly, and the explorer pans/
+  highlights to the exact nodes each tool call touched, in real time. See `docs/CHAT_AGENT.md` §1b/§3/§4b/§7
+  (a known caveat: streaming isn't atomic -- a mid-loop failure after some events were already sent can't be
+  un-sent, so the client could rarely see a partial live trace followed by a mismatched deterministic-
+  fallback final answer).
 
 ---
 

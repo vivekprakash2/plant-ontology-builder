@@ -1149,7 +1149,7 @@ def _run_agentic_events(
     that already forwarded some events to a client before a later turn
     fails will still fall back afterward -- those already-sent events
     can't be un-sent (a real, accepted tradeoff of streaming vs. a single
-    atomic batch response; see `docs/CHAT_RAG.md`).
+    atomic batch response; see `docs/CHAT_AGENT.md`).
     """
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _AGENT_SYSTEM_PROMPT},

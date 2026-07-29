@@ -568,7 +568,7 @@ async function submitQuestion(question) {
     // /api/chat streams Server-Sent Events: one "data: <json>\n\n" block per
     // live event (plan/tool_call/tool_result), ending with one "final"
     // event carrying the full answer -- see ontology_builder/agent.py's
-    // stream_answer() and docs/CHAT_RAG.md §3.
+    // stream_answer() and docs/CHAT_AGENT.md §3.
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -965,7 +965,7 @@ const WALK_STEP_DELAY_MS = 550;
 // post-hoc replay of the already-completed answer's tool-call/evidence
 // trace, not a live view of the agent loop actually running (that would
 // need streaming/SSE from /api/chat, which doesn't exist here -- see
-// docs/CHAT_RAG.md §4b's "Known limitation" note) -- but it's what turns
+// docs/CHAT_AGENT.md §4b's "Known limitation" note) -- but it's what turns
 // the previous instant snapshot into a visible walk across the graph.
 function animateGraphWalk(panel) {
   const steps = (panel && panel.walk) || [];

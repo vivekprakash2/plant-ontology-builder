@@ -10,7 +10,7 @@ Routes:
     GET  /api/graph        the whole plant ontology (nodes/edges) for the explorer panel
     POST /api/chat         {"question": "..."} -> text/event-stream of live plan/tool-call/
                            tool-result events, ending with one "final" event carrying the same
-                           answer+evidence+panel JSON shape as before (see docs/CHAT_RAG.md §3).
+                           answer+evidence+panel JSON shape as before (see docs/CHAT_AGENT.md §3).
 
 Run:
     python3 server.py

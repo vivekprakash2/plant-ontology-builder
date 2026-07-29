@@ -104,7 +104,7 @@ infer a mis-set-alarm-limit conclusion *behaviorally*, from `AlarmEvent` value/t
 "the value oscillates in a tight band right at some unknown threshold") — a correct qualitative answer, but
 unable to cite the actual configured number as hard evidence the way it cites work order IDs or setpoint
 values elsewhere. This was found and closed while checking tool coverage against
-`docs/TEAM_HANDBOOK.md` §7 Q5 (TK-201 alarm flood) — see `docs/CHAT_RAG.md` §6 for the full story and
+`docs/TEAM_HANDBOOK.md` §7 Q5 (TK-201 alarm flood) — see `docs/CHAT_AGENT.md` §6 for the full story and
 live-verified before/after answers. Confirmed real-world payoff: TK-201's actual configured deadband is 0.1%
 against an observed level swing of ~0.3% (78.3%↔78.6%) around its 78.5% H limit — i.e. the deadband genuinely
 is too tight relative to real process noise, not just "looks that way" from event timing alone.
