@@ -2,7 +2,7 @@
   {
     "unified_id": "ASSET-001",
     "canonical_name": "Recycle Gas Compressor 101",
-    "confidence": 0.803,
+    "confidence": 0.765,
     "system_count": 6,
     "members": [
       {
@@ -115,21 +115,13 @@
       "class match",
       "criticality match",
       "equipment_number match",
-      "name similarity 0.60 ('Compressor Speed Control' ~ 'Recycle Gas Compressor Lube Oil Temp')",
-      "name similarity 0.60 ('Recycle Gas Compressor 101' ~ 'Compressor Speed Control')",
-      "name similarity 0.62 ('Compressor Speed Control' ~ 'H2 Recycle Compressor')",
-      "name similarity 0.64 ('Compressor Speed Control' ~ 'Recycle Gas Compressor Turbine Drive')",
-      "name similarity 0.64 ('Facility 1 > Unit 100 > Gas Compressor 101' ~ 'Compressor Speed Control')",
-      "name similarity 0.65 ('Facility 1 > Unit 100 > Gas Compressor 101' ~ 'Recycle Gas Compressor Lube Oil Temp')",
-      "name similarity 0.67 ('Facility 1 > Unit 100 > Gas Compressor 101' ~ 'Recycle Gas Compressor Turbine Drive')",
-      "name similarity 0.68 ('Facility 1 > Unit 100 > Gas Compressor 101' ~ 'H2 Recycle Compressor')",
-      "name similarity 0.70 ('Recycle Gas Compressor 101' ~ 'Facility 1 > Unit 100 > Gas Compressor 101')",
-      "name similarity 0.72 ('Recycle Gas Compressor Lube Oil Temp' ~ 'H2 Recycle Compressor')",
-      "name similarity 0.76 ('Recycle Gas Compressor Lube Oil Temp' ~ 'Recycle Gas Compressor Turbine Drive')",
-      "name similarity 0.78 ('Recycle Gas Compressor 101' ~ 'Recycle Gas Compressor Lube Oil Temp')",
-      "name similarity 0.82 ('H2 Recycle Compressor' ~ 'Recycle Gas Compressor Turbine Drive')",
-      "name similarity 0.83 ('Recycle Gas Compressor 101' ~ 'H2 Recycle Compressor')",
-      "name similarity 0.85 ('Recycle Gas Compressor 101' ~ 'Recycle Gas Compressor Turbine Drive')",
+      "name similarity 0.62 ('Recycle Gas Compressor 101' ~ 'Facility 1 > Unit 100 > Gas Compressor 101')",
+      "name similarity 0.63 ('H2 Recycle Compressor' ~ 'Recycle Gas Compressor Turbine Drive')",
+      "name similarity 0.63 ('Recycle Gas Compressor Lube Oil Temp' ~ 'H2 Recycle Compressor')",
+      "name similarity 0.74 ('Recycle Gas Compressor 101' ~ 'Recycle Gas Compressor Lube Oil Temp')",
+      "name similarity 0.74 ('Recycle Gas Compressor 101' ~ 'Recycle Gas Compressor Turbine Drive')",
+      "name similarity 0.77 ('Recycle Gas Compressor 101' ~ 'H2 Recycle Compressor')",
+      "name similarity 0.81 ('Recycle Gas Compressor Lube Oil Temp' ~ 'Recycle Gas Compressor Turbine Drive')",
       "unit match"
     ],
     "needs_review": false,
@@ -138,7 +130,7 @@
   {
     "unified_id": "ASSET-002",
     "canonical_name": "Crude Charge Pump 101",
-    "confidence": 0.84,
+    "confidence": 0.842,
     "system_count": 6,
     "members": [
       {
@@ -265,20 +257,13 @@
       "criticality match",
       "equipment_number match",
       "hard FK: ERP posting POST-9001 -> work order WO-4471 -> CMMS asset EQ-1042",
-      "name similarity 0.61 ('Facility 1 > Unit 100 > Centrifugal Pump 101' ~ 'Crude Charge Pump Flow Control')",
-      "name similarity 0.64 ('Crude Charge Pump 101' ~ 'Facility 1 > Unit 100 > Centrifugal Pump 101')",
-      "name similarity 0.65 ('Facility 1 > Unit 100 > Centrifugal Pump 101' ~ 'Crude Charge Pump 101 Vibration')",
-      "name similarity 0.73 ('Crude Charge Pump 101 Vibration' ~ 'Crude Charge Pump A (Main Building)')",
-      "name similarity 0.73 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump A (Main Building)')",
-      "name similarity 0.74 ('Facility 1 > Unit 100 > Centrifugal Pump 101' ~ 'Crude Charge Pump A (Main Building)')",
-      "name similarity 0.78 ('Crude Charge Pump 101' ~ 'Crude Charge Pump A (Main Building)')",
-      "name similarity 0.79 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump 101 Vibration')",
-      "name similarity 0.82 ('Crude Charge Pump 101 Vibration' ~ 'Crude Charge Pump A')",
-      "name similarity 0.83 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump A')",
-      "name similarity 0.84 ('Crude Charge Pump 101' ~ 'Crude Charge Pump Flow Control')",
-      "name similarity 0.85 ('Crude Charge Pump A' ~ 'Crude Charge Pump A (Main Building)')",
-      "name similarity 0.87 ('Crude Charge Pump 101' ~ 'Crude Charge Pump 101 Vibration')",
-      "name similarity 0.92 ('Crude Charge Pump 101' ~ 'Crude Charge Pump A')",
+      "name similarity 0.62 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.64 ('Crude Charge Pump 101' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.69 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump 101 Vibration')",
+      "name similarity 0.70 ('Crude Charge Pump 101 Vibration' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.71 ('Crude Charge Pump 101' ~ 'Crude Charge Pump Flow Control')",
+      "name similarity 0.81 ('Crude Charge Pump 101' ~ 'Crude Charge Pump 101 Vibration')",
+      "name similarity 0.90 ('Crude Charge Pump 101' ~ 'Crude Charge Pump A')",
       "unit match"
     ],
     "needs_review": false,
@@ -287,7 +272,7 @@
   {
     "unified_id": "ASSET-003",
     "canonical_name": "Heat Exchanger 101",
-    "confidence": 0.9,
+    "confidence": 0.837,
     "system_count": 4,
     "members": [
       {
@@ -371,12 +356,7 @@
       "class match",
       "criticality match",
       "equipment_number match",
-      "name similarity 0.63 ('Facility 1 > Unit 100 > Heat Exchanger 101' ~ 'Crude Preheat Bundle')",
-      "name similarity 0.67 ('Preheat Exchanger 101 Outlet Temp' ~ 'Crude Preheat Bundle')",
-      "name similarity 0.68 ('Facility 1 > Unit 100 > Heat Exchanger 101' ~ 'Preheat Exchanger Shell Side')",
-      "name similarity 0.70 ('Crude Preheat Bundle' ~ 'Preheat Exchanger Shell Side')",
-      "name similarity 0.71 ('Facility 1 > Unit 100 > Heat Exchanger 101' ~ 'Preheat Exchanger 101 Outlet Temp')",
-      "name similarity 0.80 ('Preheat Exchanger 101 Outlet Temp' ~ 'Preheat Exchanger Shell Side')",
+      "name similarity 0.66 ('Preheat Exchanger 101 Outlet Temp' ~ 'Preheat Exchanger Shell Side')",
       "unit match"
     ],
     "needs_review": false,
@@ -385,7 +365,7 @@
   {
     "unified_id": "ASSET-004",
     "canonical_name": "Boiler Feed Flow Control Valve",
-    "confidence": 0.795,
+    "confidence": 0.722,
     "system_count": 4,
     "members": [
       {
@@ -422,16 +402,14 @@
         "local_id": "U400_V101",
         "name": "Cooling Water Flow Control",
         "unit": "400",
-        "asset_class": "Valve",
+        "asset_class": null,
         "equipment_number": "101",
         "criticality": null,
         "attributes": {
           "pv_tag": "FI-400-V101",
           "sp_tag": "FS-400-V101",
           "op_tag": "FO-400-V101",
-          "loop_type": "Flow",
-          "asset_class_source": "llm_open_vocab",
-          "asset_class_raw_llm_label": "Valve"
+          "loop_type": "Flow"
         }
       },
       {
@@ -470,21 +448,21 @@
       "criticality match",
       "equipment_number match",
       "hard FK: ERP posting POST-9002 -> work order WO-4530 -> CMMS asset EQ-8001",
-      "name similarity 0.63 ('Cooling Water Flow (CV-400)' ~ 'Utility CW Control Valve')",
-      "name similarity 0.66 ('Cooling Water Flow (CV-400)' ~ 'Boiler Feed Flow Control Valve')",
-      "name similarity 0.70 ('Cooling Water Flow Control' ~ 'Utility CW Control Valve')",
-      "name similarity 0.72 ('Utility CW Control Valve' ~ 'Boiler Feed Flow Control Valve')",
-      "name similarity 0.74 ('Cooling Water Flow Control' ~ 'Boiler Feed Flow Control Valve')",
-      "name similarity 0.83 ('Cooling Water Flow Control' ~ 'Cooling Water Flow (CV-400)')",
+      "name similarity 0.61 ('Cooling Water Flow Control' ~ 'Boiler Feed Flow Control Valve')",
+      "name similarity 0.67 ('Utility CW Control Valve' ~ 'Boiler Feed Flow Control Valve')",
+      "name similarity 0.75 ('Cooling Water Flow Control' ~ 'Cooling Water Flow (CV-400)')",
       "unit match"
     ],
-    "needs_review": false,
-    "review_notes": []
+    "needs_review": true,
+    "review_notes": [
+      "DCS:U400_V101 <-> ERP:ERP-FAC1-VLV-400-101: score 0.552, no confirmed class match and no high-confidence name match -- verify this is the same physical asset",
+      "DCS:U400_V101 <-> Historian:FAC1.UNIT400.CONTROL_VALVE_101: score 0.589, no confirmed class match and no high-confidence name match -- verify this is the same physical asset"
+    ]
   },
   {
     "unified_id": "ASSET-005",
     "canonical_name": "Product Storage Tank 201",
-    "confidence": 0.937,
+    "confidence": 0.922,
     "system_count": 2,
     "members": [
       {
@@ -522,7 +500,7 @@
     "evidence": [
       "class match",
       "equipment_number match",
-      "name similarity 0.95 ('Product Storage Tank 201' ~ 'Product Storage Tank 201 Level')",
+      "name similarity 0.89 ('Product Storage Tank 201' ~ 'Product Storage Tank 201 Level')",
       "unit match"
     ],
     "needs_review": false,
@@ -531,7 +509,7 @@
   {
     "unified_id": "ASSET-006",
     "canonical_name": "Centrifugal Pump 102",
-    "confidence": 0.857,
+    "confidence": 0.782,
     "system_count": 2,
     "members": [
       {
@@ -572,7 +550,6 @@
     "evidence": [
       "class match",
       "equipment_number match",
-      "name similarity 0.63 ('Facility 1 > Unit 100 > Centrifugal Pump 102' ~ 'Reflux Pump 102 Suction Press')",
       "unit match"
     ],
     "needs_review": false,
@@ -581,7 +558,7 @@
   {
     "unified_id": "ASSET-007",
     "canonical_name": "Column Pressure Control",
-    "confidence": 0.885,
+    "confidence": 0.836,
     "system_count": 2,
     "members": [
       {
@@ -620,7 +597,7 @@
     "evidence": [
       "class match",
       "equipment_number match",
-      "name similarity 0.74 ('Column Pressure Control' ~ 'Column 101 Differential Pressure')",
+      "name similarity 0.55 ('Column Pressure Control' ~ 'Column 101 Differential Pressure')",
       "unit match"
     ],
     "needs_review": false,
@@ -629,7 +606,7 @@
   {
     "unified_id": "ASSET-008",
     "canonical_name": "Heater Outlet Temp Control",
-    "confidence": 0.856,
+    "confidence": 0.771,
     "system_count": 2,
     "members": [
       {
@@ -668,7 +645,6 @@
     "evidence": [
       "class match",
       "equipment_number match",
-      "name similarity 0.63 ('Heater Outlet Temp Control' ~ 'Fired Heater 101 Fuel Gas Flow')",
       "unit match"
     ],
     "needs_review": false,

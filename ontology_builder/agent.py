@@ -178,6 +178,116 @@ def _asset_name(entities: list[dict[str, Any]], unified_id: str) -> str:
 # Scenario handlers
 # --------------------------------------------------------------------------
 
+def _causal_factors(entities, kg, unified_id, now: datetime = NOW) -> list[dict[str, Any]]:
+    """Evidence-backed candidate causes for one asset's mechanical symptoms
+    (vibration / overheating / degradation). Each factor is only emitted when
+    the supporting records actually exist in the graph -- never asserted from
+    a scenario script -- so the same function is correct for P-101 (setpoint +
+    seal), K-101 (upstream cooling-valve problem overheating the lube oil),
+    P-102 (falling suction pressure), or any future asset with none of these.
+
+    Returns [{kind, sentence, evidence: [...], recommendation}, ...].
+    """
+    context = kg.context_for_asset(unified_id)
+    factors: list[dict[str, Any]] = []
+
+    # 1. Recent operator setpoint INCREASE on the asset's own loop (last 7d) --
+    # pushing equipment past its design point is a classic self-inflicted cause.
+    recent_sps = [
+        op for op in context.get("OperatorAction", [])
+        if op.get("action_type") == "SP_CHANGE" and (now - _parse_ts(op["timestamp"])).days < 7
+    ]
+    latest_sp = max(recent_sps, key=lambda r: r["timestamp"]) if recent_sps else None
+    if latest_sp:
+        old, new = float(latest_sp["old_value"]), float(latest_sp["new_value"])
+        pct = (new - old) / old * 100 if old else 0
+        if pct > 0:
+            factors.append({
+                "kind": "setpoint_increase",
+                "sentence": (
+                    f"the operator raised the flow setpoint {old:g} -> {new:g} ({pct:+.0f}%) "
+                    f"{_ago(latest_sp['timestamp'], now)} (shift {latest_sp['shift']}, "
+                    f"{latest_sp['operator']}, action {latest_sp['id']})"
+                ),
+                "evidence": [{"type": "operator_action", **latest_sp}],
+                "recommendation": "- Reduce the flow setpoint toward the prior value.",
+            })
+
+    # 2. Recent seal/mechanical work on the asset ITSELF (last 14d) -- a fresh
+    # repair that shifted the baseline (e.g. possible misalignment).
+    work_orders = sorted(context.get("WorkOrder", []), key=lambda r: r["created"], reverse=True)
+    seal_wo = next(
+        (
+            wo for wo in work_orders
+            if "seal" in ((wo.get("notes") or "") + " " + (wo.get("parts_used") or "")).lower()
+            and (now - _parse_ts(wo["created"])).days <= 14
+        ),
+        None,
+    )
+    if seal_wo:
+        factors.append({
+            "kind": "recent_seal_work",
+            "sentence": (
+                f"a mechanical seal was replaced {_ago(seal_wo['created'], now)} "
+                f"(work order {seal_wo['id']}); notes: \"{seal_wo['notes']}\""
+            ),
+            "evidence": [{"type": "work_order", **seal_wo}],
+            "recommendation": (
+                f"- Inspect and complete the seal alignment recheck flagged on work order {seal_wo['id']}."
+            ),
+        })
+
+    # 3. Cooling/utility problem UPSTREAM: an asset that COOLS or
+    # SUPPLIES_UTILITY to this one has a non-Closed work order -- corroborated
+    # by this asset's own lube-oil temperature trend when it has one.
+    for rel_type in ("COOLS", "SUPPLIES_UTILITY"):
+        for up_id in _upstream_neighbors(kg, unified_id, rel_type):
+            up_context = kg.context_for_asset(up_id)
+            open_wos = [wo for wo in up_context.get("WorkOrder", []) if wo.get("status") != "Closed"]
+            if not open_wos:
+                continue
+            wo = max(open_wos, key=lambda r: r["created"])
+            up_name = _asset_name(entities, up_id)
+            evidence = [{"type": "work_order", **wo}]
+            sentence = (
+                f"{up_name} (which {rel_type.replace('_', ' ').lower()} this asset) has an "
+                f"{wo['status'].lower()} work order ({wo['id']}): \"{wo['notes']}\""
+            )
+            lube_tag = _find_tag(context, "LUBE_01")
+            lube_trend = _trend(lube_tag, window_hours=24 * 14) if lube_tag else None
+            if lube_trend and lube_trend["direction"] == "rising":
+                evidence.append({"type": "historian_trend", **lube_trend})
+                sentence += (
+                    f"; the asset's own lube-oil temperature is rising "
+                    f"({lube_trend['pct_change']:+.1f}%), consistent with lost cooling"
+                )
+            factors.append({
+                "kind": "utility_cooling_problem",
+                "sentence": sentence,
+                "evidence": evidence,
+                "recommendation": (
+                    f"- Expedite the {up_name} corrective work order ({wo['id']}) and verify "
+                    "cooling/utility supply is restored."
+                ),
+            })
+
+    # 4. Cavitation signature: the asset's OWN suction pressure falling.
+    psuc_tag = _find_tag(context, "PSUC_01") or _find_tag(context, "PSUC_02")
+    psuc_trend = _trend(psuc_tag, window_hours=24 * 14) if psuc_tag else None
+    if psuc_trend and psuc_trend["direction"] == "falling":
+        factors.append({
+            "kind": "cavitation_risk",
+            "sentence": (
+                f"its suction pressure is falling ({psuc_trend['pct_change']:+.1f}%) -- "
+                "possible cavitation"
+            ),
+            "evidence": [{"type": "historian_trend", **psuc_trend}],
+            "recommendation": "- Check the suction strainer and verify NPSH margin (cavitation risk).",
+        })
+
+    return factors
+
+
 def _answer_vibration(entities, kg, unified_id) -> AgentAnswer:
     name = _asset_name(entities, unified_id)
     context = kg.context_for_asset(unified_id)
@@ -188,16 +298,9 @@ def _answer_vibration(entities, kg, unified_id) -> AgentAnswer:
     if vib_trend:
         evidence.append({"type": "historian_trend", **vib_trend})
 
-    setpoint_changes = sorted(context.get("OperatorAction", []), key=lambda r: r["timestamp"], reverse=True)
-    latest_sp = setpoint_changes[0] if setpoint_changes else None
-    if latest_sp:
-        evidence.append({"type": "operator_action", **latest_sp})
-
-    work_orders = sorted(context.get("WorkOrder", []), key=lambda r: r["created"], reverse=True)
-    seal_wo = next((wo for wo in work_orders if "seal" in (wo.get("notes") or "").lower()
-                    or "seal" in (wo.get("parts_used") or "").lower()), None)
-    if seal_wo:
-        evidence.append({"type": "work_order", **seal_wo})
+    factors = _causal_factors(entities, kg, unified_id)
+    for f in factors:
+        evidence.extend(f["evidence"])
 
     health_events = context.get("HealthEvent", [])
     if health_events:
@@ -213,46 +316,43 @@ def _answer_vibration(entities, kg, unified_id) -> AgentAnswer:
     else:
         lines[0] += " trend could not be retrieved (no vibration tag / data)."
 
-    causes = []
-    if latest_sp and latest_sp["action_type"] == "SP_CHANGE":
-        old, new = float(latest_sp["old_value"]), float(latest_sp["new_value"])
-        pct = (new - old) / old * 100 if old else 0
-        causes.append(
-            f"the operator raised the flow setpoint {old:g} -> {new:g} ({pct:+.0f}%) "
-            f"{_ago(latest_sp['timestamp'])} (shift {latest_sp['shift']}, {latest_sp['operator']}, "
-            f"action {latest_sp['id']})"
-        )
-    if seal_wo:
-        causes.append(
-            f"a mechanical seal was replaced {_ago(seal_wo['created'])} (work order {seal_wo['id']}); "
-            f"notes: \"{seal_wo['notes']}\""
-        )
-
     recommendation = None
     headline = f"No clear cause found for {name}'s vibration"
-    if causes:
-        lines.append("Likely contributing factors, most recent first: " + "; and ".join(causes) + ".")
-        if latest_sp and seal_wo:
+    if factors:
+        lines.append(
+            "Likely contributing factors, most recent first: "
+            + "; and ".join(f["sentence"] for f in factors) + "."
+        )
+        kinds = {f["kind"] for f in factors}
+        if {"setpoint_increase", "recent_seal_work"} <= kinds:
             lines.append(
                 "Most likely root cause: the recent setpoint increase is pushing the pump above its "
                 "efficiency curve, compounding a recent seal job that was flagged for alignment recheck."
             )
-            recommendation = (
-                "- Reduce the flow setpoint toward the prior value.\n"
-                f"- Inspect and complete the seal alignment recheck flagged on work order {seal_wo['id']}."
-            )
             headline = "Setpoint hike + seal misalignment driving vibration"
-        elif latest_sp:
+        elif "utility_cooling_problem" in kinds:
+            lines.append(
+                "Most likely root cause: lube-oil overheating from the upstream cooling/utility "
+                "problem -- a utility issue, not a mechanical fault in the machine itself."
+            )
+            headline = "Lube-oil overheating from upstream cooling problem"
+        elif "setpoint_increase" in kinds:
             headline = "Recent setpoint increase driving vibration"
-        elif seal_wo:
+        elif "recent_seal_work" in kinds:
             headline = "Recent seal work may be driving vibration"
+        elif "cavitation_risk" in kinds:
+            headline = "Falling suction pressure -- possible cavitation"
+        recommendation = "\n".join(f["recommendation"] for f in factors)
         confidence = "medium-high"
     else:
-        lines.append("No recent setpoint changes or seal-related work orders were found for this asset.")
+        lines.append(
+            "No recent setpoint changes, seal-related work orders, upstream utility problems, or "
+            "cavitation signatures were found for this asset."
+        )
         confidence = "low"
 
     return AgentAnswer(
-        _asset_name(entities, unified_id), "vibration", " ".join(lines), confidence, evidence,
+        name, "vibration", " ".join(lines), confidence, evidence,
         asset_id=unified_id, recommendation=recommendation, headline=headline,
     )
 
@@ -383,11 +483,25 @@ def _answer_high_dp(entities, kg, unified_id) -> AgentAnswer:
     if causes:
         lines.append("Multi-hop cause chain: " + "; and ".join(causes) + ".")
         confidence = "medium"
-        recommendation = (
-            "- Address the upstream fouling (see the linked exchanger's work order) to restore feed temperature.\n"
-            "- Inspect the reflux pump for cavitation if suction pressure continues to fall."
-        )
-        headline = "Cold feed + reflux cavitation raising column dP"
+        # Headline + recommendations reflect only the causes actually found in
+        # the graph -- never assert the full scripted S3 chain if half of it
+        # (e.g. the reflux-pump edge) isn't present in this build's topology.
+        fouling_found = any("cold feed" in c for c in causes)
+        cavitation_found = any("cavitation" in c for c in causes)
+        rec_parts = []
+        if fouling_found:
+            rec_parts.append(
+                "- Address the upstream fouling (see the linked exchanger's work order) to restore feed temperature."
+            )
+        if cavitation_found:
+            rec_parts.append("- Inspect the reflux pump for cavitation if suction pressure continues to fall.")
+        recommendation = "\n".join(rec_parts) or None
+        if fouling_found and cavitation_found:
+            headline = "Cold feed + reflux cavitation raising column dP"
+        elif fouling_found:
+            headline = "Cold feed from upstream fouling raising column dP"
+        else:
+            headline = "Reflux pump cavitation raising column dP"
     else:
         confidence = "low"
     return AgentAnswer(
@@ -396,55 +510,92 @@ def _answer_high_dp(entities, kg, unified_id) -> AgentAnswer:
     )
 
 
-def _answer_same_problem(entities, kg, k101_id, p101_id) -> AgentAnswer:
-    k_name, p_name = _asset_name(entities, k101_id), _asset_name(entities, p101_id)
-    k_context = kg.context_for_asset(k101_id)
+# Short human phrases for factor kinds, used when summarizing a comparison.
+_FACTOR_PHRASE = {
+    "setpoint_increase": "a recent operator setpoint increase",
+    "recent_seal_work": "recent seal work",
+    "utility_cooling_problem": "an upstream cooling/utility problem",
+    "cavitation_risk": "a falling-suction-pressure (cavitation) signature",
+}
+
+
+def _answer_same_problem(entities, kg, a_id, b_id) -> AgentAnswer:
+    """Generic 'is A experiencing the same problem as B?' comparison: gather
+    each asset's evidence-backed causal factors independently, then compare
+    the factor KINDS. The verdict comes entirely from what the evidence
+    shows for each asset -- there is no scripted per-scenario conclusion, so
+    this is correct for K-101-vs-P-101 (S4's distractor), P-102-vs-P-101, or
+    any other pairing a judge improvises."""
+    a_name, b_name = _asset_name(entities, a_id), _asset_name(entities, b_id)
     evidence: list[dict[str, Any]] = []
+    lines: list[str] = []
 
-    vib_tag = _find_tag(k_context, "VIB_02")
-    vib_trend = _trend(vib_tag) if vib_tag else None
-    lube_tag = _find_tag(k_context, "LUBE_01")
-    lube_trend = _trend(lube_tag, window_hours=24 * 14) if lube_tag else None
-    if vib_trend:
-        evidence.append({"type": "historian_trend", **vib_trend})
-    if lube_trend:
-        evidence.append({"type": "historian_trend", **lube_trend})
+    per_asset: dict[str, dict[str, Any]] = {}
+    for asset_id, asset_name in ((a_id, a_name), (b_id, b_name)):
+        context = kg.context_for_asset(asset_id)
+        vib_tag = _find_tag(context, "VIB_01") or _find_tag(context, "VIB_02")
+        vib_trend = _trend(vib_tag) if vib_tag else None
+        if vib_trend:
+            evidence.append({"type": "historian_trend", **vib_trend})
+            lines.append(
+                f"{asset_name} vibration: {vib_trend['direction']} ({vib_trend['pct_change']:+.1f}%)."
+            )
+        factors = _causal_factors(entities, kg, asset_id)
+        for f in factors:
+            evidence.extend(f["evidence"])
+        if factors:
+            lines.append(
+                f"{asset_name}'s likely cause: " + "; and ".join(f["sentence"] for f in factors) + "."
+            )
+        else:
+            lines.append(f"No clear causal evidence was found for {asset_name}.")
+        per_asset[asset_id] = {"name": asset_name, "factors": factors}
 
-    cv400_wo = None
-    for up_id in _upstream_neighbors(kg, k101_id, "COOLS"):
-        up_context = kg.context_for_asset(up_id)
-        cv400_wo = next(iter(sorted(up_context.get("WorkOrder", []), key=lambda r: r["created"], reverse=True)), None)
-        if cv400_wo:
-            evidence.append({"type": "work_order", **cv400_wo})
+    a_kinds = {f["kind"] for f in per_asset[a_id]["factors"]}
+    b_kinds = {f["kind"] for f in per_asset[b_id]["factors"]}
+    shared = a_kinds & b_kinds
 
-    own_wo = k_context.get("WorkOrder", [])
-
-    lines = [f"No -- {k_name} shows a vibration alarm like {p_name}, but the root cause is different."]
-    if vib_trend:
-        lines.append(f"{k_name} vibration: {vib_trend['direction']} ({vib_trend['pct_change']:+.1f}%).")
-    if lube_trend:
-        lines.append(f"Lube oil temperature: {lube_trend['direction']} ({lube_trend['pct_change']:+.1f}%).")
-    if cv400_wo:
-        lines.append(
-            f"Cooling-water valve CV-400 (which cools {k_name}'s lube oil) has an {cv400_wo['status'].lower()} "
-            f"work order ({cv400_wo['id']}): \"{cv400_wo['notes']}\"."
+    if a_kinds and b_kinds and not shared:
+        a_phrases = " + ".join(_FACTOR_PHRASE.get(k, k) for k in sorted(a_kinds))
+        b_phrases = " + ".join(_FACTOR_PHRASE.get(k, k) for k in sorted(b_kinds))
+        verdict = (
+            f"No -- the symptoms look similar, but the evidence points to different root causes: "
+            f"{a_name} shows {a_phrases}, while {b_name} shows {b_phrases}."
         )
-    if not own_wo:
-        lines.append(f"No maintenance/seal work orders exist directly on {k_name} itself.")
-    lines.append(
-        f"Root cause for {k_name}: lube-oil overheating from a stuck cooling valve -- a utility problem, "
-        f"NOT a seal/setpoint issue like {p_name}."
-    )
-    wo_suffix = f" ({cv400_wo['id']})" if cv400_wo else ""
-    recommendation = (
-        f"- Expedite the CV-400 corrective work order{wo_suffix}.\n"
-        f"- Verify lube-oil cooling is restored before continuing normal {k_name} operation."
-    )
+        headline = f"No -- {a_name}'s cause differs from {b_name}'s"
+        confidence = "medium-high"
+    elif shared:
+        shared_phrases = " + ".join(_FACTOR_PHRASE.get(k, k) for k in sorted(shared))
+        verdict = f"Partly -- both assets show {shared_phrases}, so the problems may be related."
+        headline = f"{a_name} and {b_name} may share a cause"
+        confidence = "medium"
+    else:
+        missing = [info["name"] for info in per_asset.values() if not info["factors"]]
+        verdict = (
+            "Inconclusive -- no clear causal evidence was found for "
+            + " or ".join(missing) + ", so the two problems can't be confidently compared."
+        )
+        headline = "Not enough evidence to compare the two problems"
+        confidence = "low"
+    lines.insert(0, verdict)
+
+    recommendations = []
+    for info in per_asset.values():
+        for f in info["factors"]:
+            if f["recommendation"] not in recommendations:
+                recommendations.append(f["recommendation"])
+
     return AgentAnswer(
-        k_name, "same_problem_comparison", " ".join(lines), "medium-high", evidence,
-        asset_id=k101_id, recommendation=recommendation,
-        headline=f"No -- {k_name}'s cause differs from {p_name}'s",
+        a_name, "same_problem_comparison", " ".join(lines), confidence, evidence,
+        asset_id=a_id, recommendation="\n".join(recommendations) or None, headline=headline,
     )
+
+
+# Minimum alarm transitions before a "so many alarms" question is treated as
+# an alarm FLOOD (S5's config-chatter pattern) rather than a handful of
+# genuine process alarms. TK-201's planted flood has 120 transitions; every
+# real process alarm in the data has ~3 -- the gate just has to sit between.
+_ALARM_FLOOD_MIN_TRANSITIONS = 15
 
 
 def _answer_alarm_flood(entities, kg, unified_id) -> AgentAnswer:
@@ -459,6 +610,39 @@ def _answer_alarm_flood(entities, kg, unified_id) -> AgentAnswer:
 
     values = [float(a["value"]) for a in alarms if a.get("value")]
     active_count = sum(1 for a in alarms if a["state"] == "ACTIVE")
+
+    # --- Gate: only assert the S5 "nuisance / mis-set limit" conclusion when
+    # the evidence actually shows a flood (many rapid transitions). A few
+    # genuine alarms (e.g. P-101's 3 real vibration-high alarms) must NOT get
+    # the nuisance verdict -- instead describe them honestly and, if they're
+    # vibration alarms, hand off to the vibration root-cause analysis.
+    if len(alarms) < _ALARM_FLOOD_MIN_TRANSITIONS:
+        limit_h = cfg.get("limit_h") if cfg else None
+        unit = (cfg.get("eng_unit") or "") if cfg else ""
+        intro = (
+            f"{name} has only {len(alarms)} alarm transition{'s' if len(alarms) != 1 else ''} "
+            f"({active_count} ACTIVE) -- not an alarm flood."
+        )
+        if values and limit_h is not None and max(values) > float(limit_h):
+            over_pct = (max(values) - float(limit_h)) / float(limit_h) * 100
+            intro += (
+                f" The values reach {max(values):.1f}{unit}, {over_pct:.0f}% past the configured "
+                f"H limit of {limit_h}{unit} -- a real excursion, not threshold chatter."
+            )
+        if any("VIB" in (a.get("alarm_point") or "") for a in alarms):
+            # These are genuine vibration alarms -- the real question is what's
+            # driving the vibration, so answer that.
+            vib = _answer_vibration(entities, kg, unified_id)
+            vib.answer = f"{intro} {vib.answer}"
+            vib.evidence = evidence + vib.evidence
+            return vib
+        return AgentAnswer(
+            name, "genuine_alarms",
+            intro + " These look like genuine process alarms worth investigating individually.",
+            "medium", evidence, asset_id=unified_id,
+            recommendation="- Investigate the underlying process signal rather than the alarm configuration.",
+            headline=f"{name}'s alarms look genuine, not config noise",
+        )
 
     lines = [f"{name} has {len(alarms)} alarm transitions ({active_count} ACTIVE) in the data."]
     if values:
@@ -640,6 +824,10 @@ _AGENT_SYSTEM_PROMPT = (
     "lube-oil temperature.\n"
     "6. If the evidence doesn't support a confident conclusion, say so explicitly rather than "
     "guessing.\n"
+    "6b. The conversation may include earlier question/answer turns. Use them to resolve "
+    "follow-up references ('it', 'that pump', 'the work order you mentioned') to the right asset "
+    "or record -- but treat earlier answers as conversational context only, NOT as evidence: "
+    "re-verify any fact you rely on with the tools before citing it.\n"
     "7. Structure your final answer in Markdown with EXACTLY three top-level sections, in this "
     "order, using these exact headings and no others:\n"
     "   '## Headline' -- ONE short, punchy phrase (max 12 words, no trailing period) stating the "
@@ -1149,8 +1337,42 @@ def _tool_call_label(entities: list[dict[str, Any]], tool: str, args: dict[str, 
     return f"Calling {tool}"
 
 
+# Conversation-history bounds for the agentic loop. Kept deliberately small:
+# earlier turns are context for resolving follow-up references, not a
+# transcript to re-reason over, and every prior character competes with the
+# per-turn tool-result token budget.
+_MAX_HISTORY_TURNS = 4
+_MAX_HISTORY_CHARS = 2000
+
+
+def _history_messages(history: Any) -> list[dict[str, str]]:
+    """Validate/normalize client-supplied conversation history (a list of
+    {"question": str, "answer": str} dicts, oldest first) into alternating
+    user/assistant chat messages for the agentic loop. Hostile or malformed
+    input degrades to fewer/no messages -- never raises. Only the most
+    recent `_MAX_HISTORY_TURNS` turns are kept, each side truncated to
+    `_MAX_HISTORY_CHARS` characters."""
+    if not isinstance(history, list):
+        return []
+    messages: list[dict[str, str]] = []
+    for turn in history[-_MAX_HISTORY_TURNS:]:
+        if not isinstance(turn, dict):
+            continue
+        question = str(turn.get("question") or "").strip()
+        answer = str(turn.get("answer") or "").strip()
+        if not question or not answer:
+            continue
+        messages.append({"role": "user", "content": question[:_MAX_HISTORY_CHARS]})
+        messages.append({"role": "assistant", "content": answer[:_MAX_HISTORY_CHARS]})
+    return messages
+
+
 def _run_agentic_events(
-    question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph, provider: Any
+    question: str,
+    entities: list[dict[str, Any]],
+    kg: KnowledgeGraph,
+    provider: Any,
+    history: Any = None,
 ) -> Iterator[dict[str, Any]]:
     """Generator form of the agentic loop -- yields one event per
     meaningful step AS IT HAPPENS (plan updates, a tool call starting, a
@@ -1182,6 +1404,9 @@ def _run_agentic_events(
     """
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _AGENT_SYSTEM_PROMPT},
+        # Prior turns (if any) so follow-ups like "what about its work
+        # orders?" resolve -- see _history_messages for bounds/validation.
+        *_history_messages(history),
         {"role": "user", "content": question},
     ]
     trace: list[dict[str, Any]] = []
@@ -1277,29 +1502,37 @@ def _run_agentic_events(
 
 
 def _run_agentic(
-    question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph, provider: Any
+    question: str,
+    entities: list[dict[str, Any]],
+    kg: KnowledgeGraph,
+    provider: Any,
+    history: Any = None,
 ) -> AgentAnswer:
     """Non-streaming callers (e.g. `answer_question`) that only want the
     finished answer: drains `_run_agentic_events` and returns its one
     `"final"` event's answer, discarding the intermediate plan/tool-call
     events. Same raises-on-failure contract as before this was refactored
     into a generator."""
-    for event in _run_agentic_events(question, entities, kg, provider):
+    for event in _run_agentic_events(question, entities, kg, provider, history=history):
         if event["type"] == "final":
             return event["answer"]
     raise RuntimeError("_run_agentic_events ended without a final event")  # pragma: no cover -- defensive
 
 
-def answer_question(question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph) -> AgentAnswer:
+def answer_question(
+    question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph, history: Any = None
+) -> AgentAnswer:
     """Public entry point. Uses the LLM-driven agentic tool-calling loop when
     a language model is configured; falls back to the deterministic
     `_dispatch` handlers (unchanged, always available) if no LLM is
-    configured or the agentic loop fails for any reason."""
+    configured or the agentic loop fails for any reason. `history` (prior
+    {question, answer} turns) is only used by the agentic path -- the
+    deterministic fallback is stateless per question."""
     provider = get_text_generation_provider()
     if isinstance(provider, NullTextGenerationProvider):
         return _dispatch(question, entities, kg)
     try:
-        return _run_agentic(question, entities, kg, provider)
+        return _run_agentic(question, entities, kg, provider, history=history)
     except Exception:
         return _dispatch(question, entities, kg)
 
@@ -1329,7 +1562,7 @@ def _final_payload(
 
 
 def stream_answer(
-    question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph
+    question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph, history: Any = None
 ) -> Iterator[dict[str, Any]]:
     """Streaming counterpart to `answer_question()`, for `/api/chat`'s SSE
     response: yields `_run_agentic_events`'s plan/tool_call/tool_result
@@ -1337,12 +1570,14 @@ def stream_answer(
     single final event wrapping the deterministic `_dispatch` answer (no
     intermediate events -- it's instant, there's nothing to stream) if no
     LLM is configured or the agentic loop fails for any reason, same
-    fallback discipline as `answer_question`."""
+    fallback discipline as `answer_question`. `history` (prior {question,
+    answer} turns from the client) only feeds the agentic path -- the
+    deterministic fallback stays stateless per question."""
     provider = get_text_generation_provider()
     if not isinstance(provider, NullTextGenerationProvider):
         try:
             plan: list[dict[str, str]] = []
-            for event in _run_agentic_events(question, entities, kg, provider):
+            for event in _run_agentic_events(question, entities, kg, provider, history=history):
                 if event["type"] == "final":
                     yield _final_payload(entities, kg, event["answer"], event.get("plan", []))
                     return

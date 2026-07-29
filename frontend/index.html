@@ -20,33 +20,24 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="backdrop-grid" aria-hidden="true"></div>
-  <div class="backdrop-glow" aria-hidden="true"></div>
-
   <main class="app-shell">
     <header class="app-header">
-      <div class="brand-block">
-        <img class="brand-logo" src="/logo.png" alt="AskEllie">
-        <div>
-          <p class="eyebrow">Hindenberg Refinery</p>
-          <h1>AskEllie</h1>
-        </div>
-      </div>
-      <div class="header-actions">
-        <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light mode">☀️</button>
-      </div>
+      <img class="brand-logo" src="/logo.png" alt="AskEllie">
+      <h1>AskEllie</h1>
+      <div class="spacer"></div>
+      <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light mode">☀️</button>
     </header>
 
     <section class="workspace" id="workspace">
       <section class="chat-panel" id="chatPanel">
+        <div class="chat-head" id="chatHead">Chat with Ellie</div>
         <div class="chat-thread" id="chatThread"></div>
 
         <div class="composer">
-          <div class="suggestion-row" id="suggestionRow"></div>
           <div class="composer-input">
             <textarea
               id="customQuestion"
-              placeholder="Ask Ellie anything about the plant -- e.g. 'Show me everything happening on Unit 100' or 'What's alarming right now?'"
+              placeholder="Ask Ellie about the plant…"
               rows="1"
             ></textarea>
             <button id="runButton" class="primary-btn" type="button">Ask</button>
@@ -64,26 +55,33 @@
       <aside class="explorer-panel" id="explorerPanel">
         <div class="explorer-header">
           <div class="explorer-tabs">
-            <button class="explorer-tab" id="tabOverview" type="button">Ontology Overview</button>
-            <button class="explorer-tab active" id="tabWalk" type="button">Reasoning Walk</button>
+            <button class="explorer-tab active" id="tabOverview" type="button">Ontology Overview</button>
+            <button class="explorer-tab" id="tabWalk" type="button">Reasoning Walk</button>
           </div>
-          <p class="muted" id="explorerHint">Browse the unified knowledge graph directly, or ask a question to see it come alive.</p>
+          <div class="spacer"></div>
+          <p class="explorer-counter" id="explorerHint"></p>
         </div>
-        <div class="explorer-controls" id="explorerControls">
-          <div class="focus-group" id="graphFilterGroup"></div>
-        </div>
-
         <div class="graph-viewport" id="graphViewport">
-          <div id="viewOverview" class="graph-view"></div>
-          <div id="viewWalk" class="graph-view active">
+          <div id="viewOverview" class="graph-view active"></div>
+          <div id="viewWalk" class="graph-view">
             <svg id="plantGraph" class="relationship-graph"></svg>
           </div>
 
-          <div class="zoom-stack" id="zoomStack">
-            <button id="zoomInBtn" class="zoom-btn" type="button" aria-label="Zoom in">+</button>
-            <button id="zoomResetBtn" class="zoom-btn" type="button" aria-label="Reset zoom">100%</button>
-            <button id="zoomOutBtn" class="zoom-btn" type="button" aria-label="Zoom out">-</button>
+          <!-- Empty-state hint shown on the Reasoning Walk tab until a
+               question has actually been asked -- the walk view only ever
+               shows the subgraph scoped to an answer, never the whole plant. -->
+          <div class="graph-empty-hint" id="walkEmptyHint">
+            <p><strong>No reasoning walk yet</strong></p>
+            <p>Ask Ellie a question and watch her walk the plant's knowledge graph, step by step, right here.</p>
           </div>
+
+          <div class="zoom-stack" id="zoomStack">
+            <button id="zoomInBtn" class="zoom-btn" type="button" aria-label="Zoom in" data-tip="Zoom in">+</button>
+            <button id="zoomResetBtn" class="zoom-btn" type="button" aria-label="Fit to view" data-tip="Fit to view">⤢</button>
+            <button id="zoomOutBtn" class="zoom-btn" type="button" aria-label="Zoom out" data-tip="Zoom out">−</button>
+          </div>
+
+          <div class="edge-tooltip" id="edgeTooltip" style="display:none;"></div>
 
           <!-- Live during an active question (populated from the same SSE
                tool-call events as the chat's own trace); also replayable

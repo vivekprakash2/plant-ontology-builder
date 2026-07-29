@@ -4,7 +4,7 @@
       "id": "ASSET-001",
       "label": "Asset",
       "canonical_name": "Recycle Gas Compressor 101",
-      "confidence": 0.803,
+      "confidence": 0.765,
       "system_ids": {
         "AM": "C-101",
         "APM": "Compressor_005",
@@ -22,7 +22,7 @@
       "id": "ASSET-002",
       "label": "Asset",
       "canonical_name": "Crude Charge Pump 101",
-      "confidence": 0.84,
+      "confidence": 0.842,
       "system_ids": {
         "AM": "PMP-100-101",
         "APM": "Pump_001",
@@ -42,7 +42,7 @@
       "id": "ASSET-003",
       "label": "Asset",
       "canonical_name": "Heat Exchanger 101",
-      "confidence": 0.9,
+      "confidence": 0.837,
       "system_ids": {
         "APM": "Exchanger_014",
         "CMMS": "EQ-2210",
@@ -58,7 +58,7 @@
       "id": "ASSET-004",
       "label": "Asset",
       "canonical_name": "Boiler Feed Flow Control Valve",
-      "confidence": 0.795,
+      "confidence": 0.722,
       "system_ids": {
         "CMMS": "EQ-8001",
         "DCS": "U400_V101",
@@ -71,7 +71,7 @@
       "id": "ASSET-005",
       "label": "Asset",
       "canonical_name": "Product Storage Tank 201",
-      "confidence": 0.937,
+      "confidence": 0.922,
       "system_ids": {
         "AM": "TNK-200-101",
         "Historian": "FAC1.UNIT200.STORAGE_TANK_101"
@@ -82,7 +82,7 @@
       "id": "ASSET-006",
       "label": "Asset",
       "canonical_name": "Centrifugal Pump 102",
-      "confidence": 0.857,
+      "confidence": 0.782,
       "system_ids": {
         "APM": "Pump_002",
         "Historian": "FAC1.UNIT100.PUMP_102"
@@ -96,7 +96,7 @@
       "id": "ASSET-007",
       "label": "Asset",
       "canonical_name": "Column Pressure Control",
-      "confidence": 0.885,
+      "confidence": 0.836,
       "system_ids": {
         "DCS": "U100_C101",
         "Historian": "FAC1.UNIT100.COLUMN_101"
@@ -107,7 +107,7 @@
       "id": "ASSET-008",
       "label": "Asset",
       "canonical_name": "Heater Outlet Temp Control",
-      "confidence": 0.856,
+      "confidence": 0.771,
       "system_ids": {
         "DCS": "U100_H101",
         "Historian": "FAC1.UNIT100.FIRED_HEATER_101"
@@ -2552,43 +2552,57 @@
       "source": "ASSET-002",
       "target": "ASSET-003",
       "type": "FEEDS",
-      "note": "Process line: Charge Pump P-101 \u2192 Preheat Exchanger E-101",
-      "extracted_by": "databricks-claude-opus-4-8"
+      "note": "P-101 pumps crude feed into preheat exchanger E-101",
+      "doc_source": "SCENARIO.md Sec 5b"
     },
     {
       "source": "ASSET-003",
       "target": "ASSET-008",
       "type": "FEEDS",
-      "note": "Process line: Preheat Exchanger E-101 \u2192 Fired Heater H-101",
-      "extracted_by": "databricks-claude-opus-4-8"
+      "note": "E-101 preheated crude flows to fired heater H-101",
+      "doc_source": "SCENARIO.md Sec 5b"
     },
     {
       "source": "ASSET-008",
       "target": "ASSET-007",
       "type": "FEEDS",
-      "note": "Process line: Fired Heater H-101 \u2192 Distillation Column C-101",
-      "extracted_by": "databricks-claude-opus-4-8"
+      "note": "Heated crude enters distillation column C-101",
+      "doc_source": "SCENARIO.md Sec 5b"
     },
     {
-      "source": "ASSET-008",
+      "source": "ASSET-007",
+      "target": "ASSET-009",
+      "type": "FEEDS",
+      "note": "Naphtha overhead (via condenser E-301, not in this dataset) collects in reflux drum V-201",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-009",
+      "target": "ASSET-006",
+      "type": "FEEDS",
+      "note": "Reflux drum V-201 feeds Reflux Pump P-102",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-006",
       "target": "ASSET-007",
-      "type": "SUPPLIES_UTILITY",
-      "note": "Heat is supplied by fired heater H-101 to the column",
-      "extracted_by": "databricks-claude-opus-4-8"
-    },
-    {
-      "source": "ASSET-004",
-      "target": "ASSET-008",
-      "type": "SUPPLIES_UTILITY",
-      "note": "Utilities: CV-400 (BFW/steam + cooling water), feeding H-101",
-      "extracted_by": "databricks-claude-opus-4-8"
+      "type": "FEEDS",
+      "note": "P-102 returns reflux back to column C-101",
+      "doc_source": "SCENARIO.md Sec 5b"
     },
     {
       "source": "ASSET-004",
       "target": "ASSET-001",
       "type": "COOLS",
-      "note": "CV-400 feeds the K-101 lube-oil cooler; cooling valve serves K-101 lube oil",
-      "extracted_by": "databricks-claude-opus-4-8"
+      "note": "CV-400 supplies cooling water to K-101's lube-oil cooler",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-004",
+      "target": "ASSET-008",
+      "type": "SUPPLIES_UTILITY",
+      "note": "CV-400 supplies BFW/steam & cooling water utilities to H-101",
+      "doc_source": "SCENARIO.md Sec 5b"
     }
   ]
 }

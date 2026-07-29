@@ -68,19 +68,42 @@ serves as the "no AI configured" safety net for arbitrary questions about the 8 
    sources.
 
 Key per-handler details worth knowing:
-- `_answer_vibration`: correlates the most recent operator setpoint change (`SP_CHANGE`) with the most
-  recent seal-related work order; only claims a joint root cause if **both** are present.
+
+> **Evidence-gated since 2026-07-29:** the handlers originally asserted each planted scenario's scripted
+> conclusion whenever their route matched — which produced confidently *wrong* answers on question
+> variants ("Why are there so many alarms on P-101?" got S5's "nuisance alarm" verdict for 3 genuine
+> vibration alarms; "Is P-102 the same problem as P-101?" replayed S4's lube-oil/CV-400 narrative for a
+> pairing it doesn't apply to). Every conclusion below is now derived from records actually found in the
+> graph, and `tests/test_agent_dispatch.py` locks in both the canonical questions and those variants.
+
+- **`_causal_factors(entities, kg, unified_id)`** — the shared evidence collector behind the vibration and
+  comparison handlers. Emits a factor **only when its supporting records exist**: a recent (<7d) operator
+  setpoint *increase* on the asset's own loop; recent (<14d) seal work on the asset itself; a non-Closed
+  work order on a `COOLS`/`SUPPLIES_UTILITY` upstream asset (corroborated by the asset's own rising
+  lube-oil trend when it has a `LUBE_01` tag); or a falling own-suction-pressure trend (cavitation
+  signature). Each factor carries its own sentence, evidence records, and recommendation line.
+- `_answer_vibration`: reports the vibration trend, then composes causes from `_causal_factors`. The
+  headline is picked from the factor *kinds* found: setpoint+seal → the S1 joint conclusion;
+  `utility_cooling_problem` → "lube-oil overheating from upstream cooling problem" (this is how "why is
+  the compressor vibrating?" reaches K-101's real cause); single factors get their own headlines; no
+  factors → "no clear cause found" at low confidence.
 - `_answer_fuel_rising`: walks one `FEEDS` hop upstream (e.g. heater ← exchanger) to check for exchanger
   fouling (falling outlet-temp trend + an open/closed cleaning work order).
 - `_answer_high_dp`: needs a genuine **two-hop** traversal (Column ← H-101 ← E-101) to surface both
   contributing causes (upstream fouling cascading through the heater, *and* reflux-pump cavitation via
-  falling suction pressure) — a one-hop-only version only ever found half the picture. Also checks
-  `COOLS`-linked assets for the same upstream fouling pattern.
-- `_answer_same_problem`: explicitly designed to *reject* a false-equivalence between two similar-looking
-  alarms (P-101 vibration vs K-101 vibration) by showing K-101's real cause is a stuck cooling valve
-  (utility problem), not a seal/setpoint issue — the "distractor" scenario from the handbook.
-- `_answer_alarm_flood`: looks for a tight value band right around a threshold with rapid ACTIVE/RTN
-  cycling and no supporting work order — flags it as a nuisance/mis-set alarm rather than a real upset.
+  falling suction pressure). The headline/recommendations only name the causes actually found — if the
+  graph's topology is missing the reflux edge (see the cache warning below), it says "cold feed from
+  upstream fouling" instead of claiming the full scripted chain.
+- `_answer_same_problem`: fully generic comparison — runs `_causal_factors` for **both** assets
+  independently and compares the factor-kind sets. Disjoint sets → "No — different root causes" (S4's
+  expected answer, but equally correct for P-102-vs-P-101: seal+setpoint vs cavitation); overlapping →
+  "Partly — they share …"; either side without evidence → "Inconclusive" at low confidence. No scripted
+  verdict anywhere.
+- `_answer_alarm_flood`: **gated** on an actual flood signature (`_ALARM_FLOOD_MIN_TRANSITIONS = 15`; the
+  planted TK-201 flood has 120 transitions, every genuine alarm in the data has ~3). Below the gate it
+  reports the alarms as genuine — quantifying how far past the configured H limit the values actually went
+  — and, for vibration alarms, hands off to `_answer_vibration` so the user gets the real root cause. Only
+  above the gate does it make the nuisance/mis-set-limit case, citing the configured limit + deadband.
 - `_trend(tag, window_hours=...)` **window choice matters**: 48h default works for fast-moving signals
   (vibration), but slow trends (fouling outlet-temp, lube-oil temp) need `24*14` (14 days) or they falsely
   look "stable". This was a real bug found earlier in the project (see repo memory).
@@ -228,13 +251,20 @@ trigger lazily from a request-handling thread).
 | `/app.js`, `/style.css`, `/logo.svg` | GET | Static frontend assets |
 | `/api/suggestions` | GET | Returns the 7 demo questions from `docs/TEAM_HANDBOOK.md` Sec 7 (`SUGGESTED_QUESTIONS` constant) |
 | `/api/graph` | GET | Whole plant ontology (`KnowledgeGraph.to_node_link_json()`) for the persistent explorer panel (§4b) |
-| `/api/chat` | POST | `{"question": "..."}` → `text/event-stream` of live plan/tool_call/tool_result events, ending with one `final` event carrying the full answer + evidence + UI panel JSON (same shape `/api/chat` always returned, before this was streamed) |
+| `/api/chat` | POST | `{"question": "...", "history": [{"question", "answer"}, ...]?}` → `text/event-stream` of live plan/tool_call/tool_result events, ending with one `final` event carrying the full answer + evidence + UI panel JSON (same shape `/api/chat` always returned, before this was streamed) |
 
 **`/api/chat` request handling (input validation, OWASP-relevant):**
-- `Content-Length` must be present, `> 0`, and `<= MAX_BODY_BYTES` (4096) — rejects oversized/missing bodies
-  with 400 before reading the body.
+- `Content-Length` must be present, `> 0`, and `<= MAX_BODY_BYTES` (32768; raised from 4096 when the
+  optional `history` array was added) — rejects oversized/missing bodies with 400 before reading the body.
 - Body must parse as JSON (`json.JSONDecodeError`/`UnicodeDecodeError` → 400).
 - `question` must be a non-empty string; trimmed and truncated to `MAX_QUESTION_LEN` (500 chars).
+- `history` (optional, for agentic follow-ups): must be a list or it's discarded; hard-capped at 8 entries
+  server-side, then `agent._history_messages()` keeps only the last 4 valid `{question, answer}` string
+  pairs, truncating each side to 2000 chars — hostile/malformed history degrades to no history, never an
+  error. **The deterministic fallback ignores history entirely** (stateless per question), so follow-ups
+  that rely on pronouns only resolve in agentic mode; the system prompt (rule 6b) tells the model to treat
+  prior answers as context for reference resolution, never as evidence — facts must be re-verified via
+  tools before being cited.
 - No SQL/shell/file-path use of the question anywhere in the call chain — it only ever feeds into Python
   string `.lower()`/`in` keyword checks (`_dispatch`) or gets sent as an LLM prompt message (`_run_agentic`),
   so there's no injection surface in the traditional sense; the main risk is prompt injection via question
@@ -289,6 +319,12 @@ event — `plan` re-renders the checklist (`renderPlanChecklist()`), `tool_call`
 `focusAnswerInGraph()` if any live events occurred, or `animateGraphWalk()`'s post-hoc replay if the answer
 came from the deterministic fallback (which has no live events to show).
 
+**Conversation history** (`chatHistory` in `app.js`): after each `final` event the frontend records
+`{question, answer}` (answer = headline + answer + recommendation, truncated to 2000 chars) and sends the
+last 4 turns with every subsequent question — this is what lets agentic follow-ups like "what about its
+work orders?" resolve "it". History lives only in the page's JS state: a refresh clears it, and the server
+keeps no per-session state at all.
+
 ### `build_ui_panel()` — normalizing two different evidence shapes
 
 Deterministic `_dispatch` evidence is a flat list of typed records (`{"type": "historian_trend", ...}`).
@@ -331,114 +367,105 @@ asset was resolved (nothing to walk). Exposed as `panel.walk`.
 
 ## 4. Frontend (`frontend/`)
 
-> **Status: redesigned 2026-07-29** from a fixed single-result dashboard (preset chips + one summary/
-> timeline/evidence/graph panel, modeled on `ui-prototype/`) to a conversation-style console. The old
-> layout felt too directed at the five demo scenarios and had no good home for open-ended "show me"/
-> browsing questions. The `/api/chat` JSON contract in §3 (`answer`/`headline`/`recommendation`/`panel.*`)
-> is unchanged by this redesign except two additive fields: `panel.entity_id` (the resolved `unified_id`,
-> not just the display name) and a `ref` id on every `relationships`/`timeline`/`evidence` entry (the
-> underlying graph node id, e.g. `WO-4471`, `AME-000002`, or a neighboring asset's `unified_id`) — both
-   added specifically so the frontend can correlate an answer's evidence with actual nodes in the
-> whole-plant graph. A new `GET /api/graph` route (returns `KnowledgeGraph.to_node_link_json()`, all ~160
-> nodes/edges in one shot) backs the new persistent explorer panel described below.
->
-> **Follow-up feedback (same day, 2026-07-29):** functionally verified end-to-end (chat thread, filters,
-> pan/zoom, inspector, auto-highlight-on-answer all work, per the verification notes below), but the user
-> considers the visual design "incredibly ugly" and does **not** find the Plant Ontology Explorer useful in
-> its current form — visual polish and the explorer's actual value are both **open, unresolved problems**,
-> not solved ones. Deliberately paused here; picking this back up later should treat the architecture below
-> (chat thread + persistent graph, tied together via `focusAnswerInGraph`) as a working *skeleton* to
-> redesign the visuals/interaction of, not as a finished result to defend. See `docs/EXTENDED_SCOPE.md`'s
-> "Frontend / UI" section for the standing backlog entry tracking this.
+> **Status: redesigned twice on 2026-07-29.** First from a fixed single-result dashboard (modeled on
+> `ui-prototype/`) to a conversation-style console + persistent whole-graph explorer; then — after user
+> feedback that the visuals were ugly and the always-on whole-graph explorer wasn't useful — restyled to
+> match `design_mockups/frontend_redesign_v3.html` and restructured so the graph pane is *scoped*: an
+> always-bounded **Ontology Overview** (schema level) plus a **Reasoning Walk** that only ever shows the
+> subgraph the current answer actually touched. The category-filter "browse everything" mode was removed
+> deliberately. The `/api/chat` JSON contract in §3 is unchanged throughout (additive fields only:
+> `panel.entity_id`, per-entry `ref` ids, `panel.walk`); `GET /api/graph` still backs the graph pane.
 
-Vanilla HTML/CSS/JS, no build step, no framework. Two-pane layout (`.workspace` grid in `style.css`):
+Vanilla HTML/CSS/JS, no build step, no framework. Layout: compact topbar (Ellie logo + "AskEllie" + theme
+toggle), then a two-pane split — chat left (38%), graph right — separated by a drag-to-resize splitter
+whose handle also collapses the graph pane entirely (it becomes a slim reopen tab on the right edge).
 
-- **Left: `.chat-panel`** — a real running conversation (`#chatThread`), not a single overwritten result.
-  Each question becomes a right-aligned user bubble; each answer becomes a left-aligned assistant card
-  appended below it (`addUserBubble()`/`renderAssistantBubble()` in `app.js`). A composer bar
-  (`.composer`) pinned at the bottom of the panel holds the suggestion chips (from `/api/suggestions`) and
-  the free-text textarea + Ask button — Enter submits, Shift+Enter inserts a newline.
-- **Right: `.explorer-panel`** — the **Plant Ontology Explorer**, a persistent, always-browsable view of
-  the *whole* knowledge graph (not scoped to the current answer), independent of chat. This is the direct
-  answer to "how do we make the graph useful while the chat agent runs" — see below.
+- **Left: `.chat-panel`** — a running conversation (`#chatThread`) with a "Chat with Ellie · N turns"
+  header strip. Before the first question the thread shows a **starter panel** ("Hi, I'm Ellie 🐘" + the
+  seven `/api/suggestions` demo questions as a single-column list of tappable cards); it's removed on the
+  first submit. The composer is an underline-style input + red Ask button — Enter submits, Shift+Enter
+  inserts a newline.
+- **Right: `.explorer-panel`** — two tabs. **Ontology Overview** (the default): a bounded, type-level
+  schema diagram. **Reasoning Walk**: empty ("No reasoning walk yet") until a question is asked, then
+  shows only the answer's subgraph.
 
-**Security posture (unchanged from before the redesign):** all dynamic content — chat bubbles, Markdown,
-timeline/evidence cards, SVG trend charts, and every graph node/edge/inspector field — is built via
-`createElement`/`textContent`/`createElementNS`+`setAttribute` only, **never** `innerHTML` with server/LLM-
-derived content, since answer text ultimately comes from live LLM output.
+**Security posture (unchanged):** all dynamic content — chat bubbles, Markdown, timeline/evidence cards,
+SVG trend charts, and every graph node/edge/inspector field — is built via `createElement`/`textContent`/
+`createElementNS`+`setAttribute` only, **never** `innerHTML` with server/LLM-derived content, since answer
+text ultimately comes from live LLM output.
 
 ### 4a. Chat thread
 
 - **`renderMarkdown(container, text)`**, `extractHeadline()`, `CONFIDENCE_SCORE`/`confidenceClass()`, and
-  the Sensor Trend `<svg>` builder (`buildTrendChartSvg()`/`buildTrendChartCard()`) are carried over
-  unchanged from the previous design (same headline/markdown/confidence-badge/trend-chart behavior
-  described in earlier revisions of this doc), just re-homed into each assistant bubble instead of one
-  fixed panel.
-- Each assistant card (`renderAssistantBubble()`): headline + confidence badge → meta line (`asset: ... ·
-  🤖 reasoned by <model>` / `✨ polished by <model>` / `rule-based`) → collapsed `<details>` "Show full
-  analysis" (full `data.answer` Markdown) → collapsed-open `<details>` "Recommended actions" (if present)
-  → Sensor Trend charts (shown inline, not collapsed) → collapsed `<details>` "Evidence & timeline (N)"
-  (combines `panel.timeline` + `panel.evidence`) → a **"Focus `<entity>` in the explorer →"** button.
-- **Loading state**: a pending assistant bubble ("Thinking...", pulsing) is appended immediately on submit
-  and replaced in place once the response arrives — this can take 30–90+ seconds for agentic answers, so
-  the thread stays visibly responsive rather than looking frozen.
-- If `panel.entity_id` is present, the explorer auto-focuses that entity's evidence **as soon as the
-  answer renders** (no extra click needed) — the button is there for re-focusing after browsing elsewhere.
+  the Sensor Trend `<svg>` builder (`buildTrendChartSvg()`/`buildTrendChartCard()`) carry over from the
+  first redesign, re-homed into each assistant bubble.
+- Each assistant card (`renderAssistantBubble()`): Ellie avatar (`/logo.png`) + name → headline + an
+  **outlined** confidence pill ("high confidence" / "AI-reasoned") → meta line (`asset: ... · 🤖 reasoned
+  by <model>` / `rule-based`) → then **all sections inline under uppercase `.section-label` headings, no
+  `<details>` dropdowns anywhere**, in the mockup's argument order: full analysis → "Evidence & timeline
+  (N)" → "Recommended actions" → Sensor Trend charts → a dashed-underline "Focus `<entity>` in the
+  explorer →" link.
+- **Evidence & timeline** is one merged list (`buildEvidenceEntries()` combines `panel.timeline` with any
+  `panel.evidence` records not already in it, e.g. undated alarm-config entries). Each entry: a dot
+  colored by source system (`SOURCE_COLOR`, same palette as the graph legend), a monospace formatted
+  time + bordered source chip + blue monospace record ref (`WO-4471`), then the record text. Only the
+  first `TIMELINE_VISIBLE_LIMIT` (6) entries render visible; the rest sit behind a "Show all N records ▾"
+  toggle — an alarm-flood answer cites 240+ records, which would otherwise swallow the thread.
+- User bubbles are neutral gray with a small timestamp; the old red-gradient bubble is gone.
+- **Loading state**: a pending "Thinking..." bubble is appended immediately on submit and replaced in
+  place — agentic answers can take 30–90+ seconds.
+- If `panel.entity_id` is present, the walk view auto-focuses that entity's evidence as soon as the answer
+  renders; the link re-focuses after browsing elsewhere.
 
-### 4b. Plant Ontology Explorer (`#graphViewport`/`#plantGraph`, new)
+### 4b. Graph pane: Ontology Overview + Reasoning Walk
 
-A whole-graph, force-directed view fetched once at page load from `GET /api/graph` and laid out entirely
-client-side (`computeForceLayout()` — a small dependency-free Fruchterman-Reingold-style simulation:
-pairwise repulsion + edge attraction + weak centering pull, ~220 iterations, cheap enough at ~160 nodes to
-run synchronously with no animation loop). Node categories mirror `ontology_builder/viz.py`'s palette
-(`Asset`/`AlarmEvent`/`AlarmConfig`/`WorkOrder`/`OperatorAction`/`HealthEvent`/`CostPosting`/
-`HistorianTag`) via `NODE_STYLE`.
+**Ontology Overview** (`renderOntologyOverview()`, the default tab) — a schema/type-level diagram bounded
+at one node per record type regardless of data volume: the `Asset` hub (count + name inside the circle)
+with one satellite per record type, radius scaled gently by record count (126 AlarmEvents visibly outweigh
+2 CostPostings), soft category-color fills. Every edge carries its relation name rotated along the line,
+plus a wide invisible hit-path driving an instant cursor tooltip ("Asset —HAS_ALARM→ AlarmEvent · 126
+links"). Hovering a node shows the type inspector (source system, fields, and for Asset the
+FEEDS/COOLS/SUPPLIES_UTILITY relations — the self-loop drawing was removed as clutter). Pan/zoom works
+here too via a `translate+scale` transform on the diagram's group in viewBox units.
 
-- **Progressive disclosure by design**: only `Asset` nodes (the 9 physical assets) + the `FEEDS`/`COOLS`/
-  `SUPPLIES_UTILITY` process-flow backbone are visible by default — showing all ~160 nodes at once would be
-  a hairball. Category filter chips (`Alarms`/`Work Orders`/`Operator Actions`/`Health Events`/
-  `Cost Postings`/`Historian Tags`) reveal/hide each record type on demand (`graphState.activeCategories`,
-  `applyVisibility()`); `Assets` itself is always on (disabled chip) since it's the ontology's backbone.
-  This is the concrete mechanism for "show me all pumps"/"show me Unit 100"-style generic browsing without
-  needing an LLM call at all.
-- **Initial view**: centers on the *median* x/y of the Asset nodes at a fixed, legible zoom (0.85) —
-  deliberately not a min/max bounding-box fit, because one spatially isolated asset (e.g. TK-201, which has
-  no `FEEDS`/`COOLS` edges to anything else and a large attached alarm-flood cluster pushing it away from
-  the rest) would otherwise drag a bbox-based "center" into empty space and make the default view look
-  off-balance. The explorer is meant to be panned/zoomed anyway.
-- **Pan** (click-drag on empty viewport space) and **zoom** (buttons, 0.3×–2.2×) via a single CSS
-  `transform: translate(...) scale(...)` on `#plantGraph`, with `transform-origin: 0 0` so the pan/zoom
-  math is plain `screenX = panX + x*zoom` (no origin-offset correction needed).
-- **Node inspector** (`#inspector`, `renderInspector()`): clicking any node shows its raw properties (a
-  `<dl>` of every non-object property) plus, for `Asset` nodes specifically, its per-system aliases
-  (`system_ids`) and a clickable list of its graph connections (jumps/pans to the neighbor on click). This
-  surfaces Stage 1 entity-resolution data (the `confidence` score) directly in the graph, independent of
-  chat.
-- **Tying the graph to reasoning (`focusAnswerInGraph(panel)`)**: when an answer resolves an entity, this
-  collects every `ref` id from `panel.relationships`/`timeline`/`evidence` plus `panel.entity_id` itself,
-  auto-enables whatever category filters are needed so those nodes are actually visible, highlights them
-  (`.highlighted` — red outline/glow) while dimming everything else (`.dimmed`), and pans the view to the
-  resolved entity. This is what makes the explorer feel connected to "what the agent just reasoned about"
-  rather than being a static, disconnected diagram. The manual "Focus in explorer" button still jumps
-  straight to this final state.
-- **Animated graph walk (`animateGraphWalk(panel)`)**: post-hoc replay fallback, used only when an answer
-  had no live events to show (the deterministic path, which has no tool calls). Replays `panel.walk` (§3's
-  `build_graph_walk()`) one step at a time (`WALK_STEP_DELAY_MS` = 550ms apart) — each step's node(s) pulse
-  blue (`.walk-current`) and the view pans to them, then fade to a dimmer blue trail (`.walk-visited`) as
-  the next step begins — before clearing the walk-only classes and settling into `focusAnswerInGraph()`'s
-  final red-highlighted state.
-- **Live graph walk (`liveWalkStep()`/`liveWalkFinish()`, new)**: for agentic answers, the explorer now
-  highlights nodes **as each tool call actually happens** — driven by real `tool_result` SSE events (§3),
-  not a replay. Same pulse/fade visual language as the replay version, just event-driven instead of
-  timer-driven. This closes the "watch it think while it's still thinking" gap noted below as resolved.
-- **Dark mode is still the default theme**, same inline head-script/`applyTheme()` mechanism as before the
-  redesign — untouched by this change.
+**Reasoning Walk** (`#plantGraph`) — never shows the whole plant. `graphState.revealedIds` is the single
+visibility gate: empty until a question is asked (empty-state hint; the trace panel/legend/zoom stack stay
+hidden), then nodes are **progressively revealed** as the reasoning touches them:
+
+- **Live** (agentic mode): each `tool_result` SSE event's `walk_step.node_ids` is revealed + pulsed blue
+  as it arrives (`liveWalkStep()`), so the subgraph literally grows while the agent thinks.
+- **Post-hoc** (deterministic mode, no live events): `animateGraphWalk(panel)` replays `panel.walk` step
+  by step. Long walks fast-forward: >20 steps drop from 550ms to 110ms per step (`walkStepDelay()`), so
+  TK-201's 122-step alarm-flood walk takes ~13s instead of ~67s (and renders as a striking radial burst).
+- Both paths settle into `focusAnswerInGraph(panel)`: the answer's cited refs re-laid-out compactly
+  (`layoutScopedSubgraph()` — re-runs the force layout on just the revealed nodes, then orients the result
+  along a gentle horizontal axis), highlighted red, walk-passthrough extras dimmed, view panned to the
+  entity. A new question (`resetWalkScope()`) clears the scope back to empty.
+- The floating **Reasoning trace** panel (top-right) numbers each step's narration and has play/step/reset
+  controls to re-watch the walk; the explorer header shows a monospace counter ("Showing N of 162 nodes
+  (scoped to this answer)").
+- Node circles are tinted with their category color; hover thickens the stroke and shows the record
+  inspector; walk edges get the same wide-hit-path cursor tooltip ("P-101 —FEEDS→ E-101").
+- **Zoom/fit** (shared stack, both tabs): +/− buttons, cursor-anchored wheel zoom, click-drag pan, and a
+  ⤢ fit button (overview → natural framing; walk → re-center on the answer's entity at 100%).
+- **Dark mode is still the default theme**, same inline head-script/`applyTheme()` mechanism.
 
 
 ---
 
 ## 5. Quirks & gotchas (keep this section current)
 
+- **The graph cache can silently carry an incomplete LLM-extracted topology.** `output/graph.json` is
+  trusted verbatim by `load_or_build()`. A cache committed on 2026-07-28 had been built by the LLM
+  topology extractor and was missing the **P-102 → Column reflux `FEEDS` edge** (plus all V-201 edges),
+  while containing a spurious "H-101 SUPPLIES_UTILITY Column" edge — so `_answer_high_dp` could never
+  find S3's cavitation half, and the then-hardcoded headline claimed "reflux cavitation" anyway, masking
+  the gap for a full day (caught by `tests/test_agent_dispatch.py`). Two lessons now encoded in code:
+  headlines/recommendations only name causes actually found; and after any `FORCE_REBUILD=1` with the LLM
+  configured, **eyeball the extracted `FEEDS/COOLS/SUPPLIES_UTILITY` edges** (the build prints a
+  `topology_extraction: N accepted, M dropped` line — investigate a non-zero `dropped` count) before
+  trusting the cache for a demo. The deterministic fallback topology (`graph.py`'s `_PROCESS_TOPOLOGY`)
+  is complete per SCENARIO.md §5b.
 - **Historian trend window length matters.** 48h default is right for vibration but falsely shows "stable"
   for slow trends (fouling, lube-oil temp) — those handlers explicitly pass `window_hours=24*14`. Any new
   handler dealing with a slow-moving signal must do the same.

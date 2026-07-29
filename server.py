@@ -46,8 +46,12 @@ if _env_file.exists():
             _key, _, _value = _line.partition("=")
             os.environ.setdefault(_key.strip(), _value.strip().strip('"').strip("'"))
 
-MAX_BODY_BYTES = 4_096
+# Raised from 4 KB when the request body grew an optional `history` array
+# (last few {question, answer} turns for agentic follow-ups): 4 prior turns
+# x ~2 KB answer each + the question itself fits comfortably in 32 KB.
+MAX_BODY_BYTES = 32_768
 MAX_QUESTION_LEN = 500
+MAX_HISTORY_TURNS = 8  # hard cap on list length; agent.py trims further
 
 _STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
@@ -161,6 +165,17 @@ class ChatHandler(BaseHTTPRequestHandler):
             return
         question = question.strip()[:MAX_QUESTION_LEN]
 
+        # Optional conversation history for agentic follow-ups ("what about
+        # its work orders?"). Anything malformed degrades to no history --
+        # deeper per-turn validation/truncation happens in
+        # agent._history_messages, and the deterministic fallback ignores it
+        # entirely (it's stateless per question).
+        history = body.get("history")
+        if not isinstance(history, list):
+            history = None
+        else:
+            history = history[-MAX_HISTORY_TURNS:]
+
         # Server-Sent Events: one "data: <json>\n\n" line per live event from
         # stream_answer() (plan updates, tool-call start, tool-call result),
         # ending with one "final" event carrying the same response shape
@@ -175,7 +190,7 @@ class ChatHandler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         try:
-            for event in stream_answer(question, _ENTITIES, _KG):
+            for event in stream_answer(question, _ENTITIES, _KG, history=history):
                 self.wfile.write(f"data: {json.dumps(event)}\n\n".encode("utf-8"))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
