@@ -629,6 +629,12 @@ _AGENT_SYSTEM_PROMPT = (
     "4. When reasoning about causes, consider both the asset's own history AND related "
     "upstream/downstream assets via get_related_assets -- some problems cascade across equipment "
     "(e.g. a fouled exchanger raising a downstream heater's fuel use).\n"
+    "4b. list_assets and get_asset_context both return each asset's own 'monitored_params' (or "
+    "'asset_monitored_params') when APM covers it -- e.g. a pump's own suction pressure. If one of "
+    "an asset's own monitored parameters is trending abnormally, treat that as a legitimate "
+    "candidate root cause FOR THAT ASSET in its own right, not automatically just a downstream "
+    "symptom of some other cause -- weigh it against the alternative explanations using the actual "
+    "evidence, don't dismiss it by default just because another plausible cause is also present.\n"
     "5. Use get_historian_trend with a short window (e.g. 48 hours) for fast-moving signals like "
     "vibration, and a longer window (e.g. 336 hours / 14 days) for slow trends like fouling or "
     "lube-oil temperature.\n"
@@ -814,7 +820,20 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
 ]
 
-_MAX_AGENT_TURNS = 7
+_MAX_AGENT_TURNS = 12
+# Raised from 7 to 12 after live-testing found a genuine 2-hop question (Column
+# dP <- H-101 <- E-101 fouling -- the exact S3 cascade from SCENARIO.md) hitting
+# "inconclusive within the tool-call budget" despite the model having already
+# gathered every piece of correct evidence (dP +121%, fuel flow +8.7%, suction
+# pressure -11.8%). Root cause: `write_plan` update calls each consume a full
+# turn (one `provider.chat()` round trip) just like a real tool call, and a
+# multi-hop question needs genuinely SEQUENTIAL tool calls (can't look up
+# H-101's own upstream neighbor E-101 until get_related_assets(H-101) has
+# already returned) -- those can't be batched into fewer turns the way
+# independent lookups can. 7 was sized before `write_plan` existed; 12 gives
+# enough headroom for plan-update turns + a real 2-3 hop causal chain without
+# materially hurting latency (each turn's cost is dominated by the model's own
+# response time, not the turn-loop overhead).
 
 # Node labels that hold free-text/content fields worth searching, mapped to
 # the plant IT system that produces them (matches the system names used
@@ -856,6 +875,12 @@ def _tool_list_assets(entities: list[dict[str, Any]], kg: KnowledgeGraph, args: 
             "unified_id": e["unified_id"],
             "canonical_name": e["canonical_name"],
             "systems": {m["system"]: m["local_id"] for m in e["members"]},
+            # Which of this asset's own signals APM recognizes as a health/
+            # failure-monitoring parameter for it specifically (e.g. a pump's
+            # own suction pressure) -- None if APM doesn't cover this asset.
+            "monitored_params": kg.nodes[e["unified_id"]].properties.get("monitored_params")
+            if e["unified_id"] in kg.nodes
+            else None,
         }
         for e in entities
     ]
@@ -879,7 +904,11 @@ def _tool_get_asset_context(entities: list[dict[str, Any]], kg: KnowledgeGraph, 
                     pass
             rows.append(r)
         annotated[label] = rows
-    return {"reference_time": NOW.isoformat(), "records": annotated}
+    return {
+        "reference_time": NOW.isoformat(),
+        "asset_monitored_params": kg.nodes[unified_id].properties.get("monitored_params"),
+        "records": annotated,
+    }
 
 
 def _tool_get_historian_trend(entities: list[dict[str, Any]], kg: KnowledgeGraph, args: dict) -> Any:

@@ -270,7 +270,7 @@
       "name similarity 0.65 ('Facility 1 > Unit 100 > Centrifugal Pump 101' ~ 'Crude Charge Pump 101 Vibration')",
       "name similarity 0.73 ('Crude Charge Pump 101 Vibration' ~ 'Crude Charge Pump A (Main Building)')",
       "name similarity 0.73 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump A (Main Building)')",
-      "name similarity 0.75 ('Facility 1 > Unit 100 > Centrifugal Pump 101' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.74 ('Facility 1 > Unit 100 > Centrifugal Pump 101' ~ 'Crude Charge Pump A (Main Building)')",
       "name similarity 0.78 ('Crude Charge Pump 101' ~ 'Crude Charge Pump A (Main Building)')",
       "name similarity 0.79 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump 101 Vibration')",
       "name similarity 0.82 ('Crude Charge Pump 101 Vibration' ~ 'Crude Charge Pump A')",

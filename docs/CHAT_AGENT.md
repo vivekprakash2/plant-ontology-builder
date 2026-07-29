@@ -111,8 +111,13 @@ priority fallback after `get_asset_context`/`get_related_assets`) and `_flatten_
 show up as ordinary evidence cards/timeline entries) — see §3.
 
 **Loop** (`_run_agentic_events`, a generator; `_run_agentic` just drains it for the non-streaming form; max
-`_MAX_AGENT_TURNS = 7` turns — raised from 6 when `write_plan` was added, since a mandatory first plan call
-now uses part of the budget):
+`_MAX_AGENT_TURNS = 12` turns — raised 6 → 7 when `write_plan` was added (a mandatory first plan call uses
+part of the budget), then 7 → 12 after live-testing found a genuine 2-hop question (Column dP ← H-101 ←
+E-101 fouling, the S3 cascade) hit "inconclusive within the tool-call budget" despite the model having
+already gathered all the correct evidence — `write_plan` update calls each consume a full turn just like a
+real tool call, and a multi-hop question needs genuinely sequential calls (can't look up H-101's own
+upstream neighbor E-101 until `get_related_assets(H-101)` has already returned), which can't be batched into
+fewer turns the way independent lookups can):
 1. Seed `messages` with `_AGENT_SYSTEM_PROMPT` (rules: call `write_plan` first and keep it updated, always
    use tools before answering, never invent facts/IDs/numbers, cite specific evidence, consider
    upstream/downstream assets, use short/long historian windows appropriately, say so explicitly if evidence

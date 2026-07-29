@@ -12,7 +12,11 @@
         "DCS": "U100_K101",
         "ERP": "ERP-FAC1-CMP-100-101",
         "Historian": "FAC1.UNIT100.GAS_COMPRESSOR_101"
-      }
+      },
+      "monitored_params": [
+        "Vibration",
+        "LubeOilTemp"
+      ]
     },
     {
       "id": "ASSET-002",
@@ -26,7 +30,13 @@
         "DCS": "U100_P101",
         "ERP": "ERP-FAC1-PMP-100-101",
         "Historian": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101"
-      }
+      },
+      "monitored_params": [
+        "Vibration",
+        "BearingTemp",
+        "SuctionPressure",
+        "DischargePressure"
+      ]
     },
     {
       "id": "ASSET-003",
@@ -38,7 +48,11 @@
         "CMMS": "EQ-2210",
         "ERP": "ERP-FAC1-HEX-100-101",
         "Historian": "FAC1.UNIT100.HEAT_EXCHANGER_101"
-      }
+      },
+      "monitored_params": [
+        "OutletTemp",
+        "FoulingFactor"
+      ]
     },
     {
       "id": "ASSET-004",
@@ -50,7 +64,8 @@
         "DCS": "U400_V101",
         "ERP": "ERP-FAC1-VLV-400-101",
         "Historian": "FAC1.UNIT400.CONTROL_VALVE_101"
-      }
+      },
+      "monitored_params": null
     },
     {
       "id": "ASSET-005",
@@ -60,7 +75,8 @@
       "system_ids": {
         "AM": "TNK-200-101",
         "Historian": "FAC1.UNIT200.STORAGE_TANK_101"
-      }
+      },
+      "monitored_params": null
     },
     {
       "id": "ASSET-006",
@@ -70,7 +86,11 @@
       "system_ids": {
         "APM": "Pump_002",
         "Historian": "FAC1.UNIT100.PUMP_102"
-      }
+      },
+      "monitored_params": [
+        "SuctionPressure",
+        "Flow"
+      ]
     },
     {
       "id": "ASSET-007",
@@ -80,7 +100,8 @@
       "system_ids": {
         "DCS": "U100_C101",
         "Historian": "FAC1.UNIT100.COLUMN_101"
-      }
+      },
+      "monitored_params": null
     },
     {
       "id": "ASSET-008",
@@ -90,7 +111,8 @@
       "system_ids": {
         "DCS": "U100_H101",
         "Historian": "FAC1.UNIT100.FIRED_HEATER_101"
-      }
+      },
+      "monitored_params": null
     },
     {
       "id": "ASSET-009",
@@ -99,7 +121,8 @@
       "confidence": null,
       "system_ids": {
         "DCS": "U100_V201"
-      }
+      },
+      "monitored_params": null
     },
     {
       "id": "AME-000004",
@@ -2533,13 +2556,6 @@
       "extracted_by": "databricks-claude-opus-4-8"
     },
     {
-      "source": "ASSET-002",
-      "target": "ASSET-003",
-      "type": "FEEDS",
-      "note": "Process line: Charge Pump P-101 \u2192 Preheat Exchanger E-101",
-      "extracted_by": "databricks-claude-opus-4-8"
-    },
-    {
       "source": "ASSET-003",
       "target": "ASSET-008",
       "type": "FEEDS",
@@ -2571,14 +2587,7 @@
       "source": "ASSET-004",
       "target": "ASSET-001",
       "type": "COOLS",
-      "note": "CV-400 feeds the K-101 lube-oil cooler (cooling water)",
-      "extracted_by": "databricks-claude-opus-4-8"
-    },
-    {
-      "source": "ASSET-006",
-      "target": "ASSET-007",
-      "type": "FEEDS",
-      "note": "Reflux Pump P-102 returns reflux back to the column",
+      "note": "CV-400 feeds the K-101 lube-oil cooler; cooling valve serves K-101 lube oil",
       "extracted_by": "databricks-claude-opus-4-8"
     }
   ]

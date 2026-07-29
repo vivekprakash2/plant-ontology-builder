@@ -180,12 +180,31 @@ def build_graph(
     lookup = _build_reverse_lookup(entities)
 
     for entity in entities:
+        # APM's `monitored_params` (e.g. ["SuctionPressure", "Flow"]) tells a
+        # reasoning agent WHICH of this asset's own trends are a recognized
+        # health/failure signal for it specifically -- e.g. that a pump's own
+        # suction-pressure trend is itself a first-class candidate cause
+        # (cavitation risk), not automatically just a downstream symptom of
+        # something else. Captured in Stage 1's AssetProfile.attributes
+        # already, but previously never made it past that -- silently
+        # dropped instead of attached to the graph, so no tool could ever
+        # surface it. General for any asset/parameter, not a hardcoded rule
+        # about pumps or cavitation specifically.
+        monitored_params = next(
+            (
+                m["attributes"].get("monitored_params")
+                for m in entity["members"]
+                if m["system"] == "APM" and m.get("attributes", {}).get("monitored_params")
+            ),
+            None,
+        )
         kg.add_node(
             entity["unified_id"],
             "Asset",
             canonical_name=entity["canonical_name"],
             confidence=entity["confidence"],
             system_ids={m["system"]: m["local_id"] for m in entity["members"]},
+            monitored_params=monitored_params,
         )
 
     # --- Alarm Management ---
