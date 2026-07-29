@@ -1,0 +1,96 @@
+{
+  "system": "DCS_Experion",
+  "unit": "Unit_100",
+  "loops": [
+    {
+      "loop_id": "U100_P101",
+      "loop_name": "Crude Charge Pump Flow Control",
+      "loop_type": "Flow",
+      "equipment_ref": "U100_P101",
+      "pv_tag": "FI-100-P101",
+      "sp_tag": "FS-100-P101",
+      "op_tag": "FO-100-P101",
+      "eng_unit": "m3/h",
+      "tuning": {
+        "P": 1.2,
+        "I": 30,
+        "D": 0
+      }
+    },
+    {
+      "loop_id": "U100_H101",
+      "loop_name": "Heater Outlet Temp Control",
+      "loop_type": "Temp",
+      "equipment_ref": "U100_H101",
+      "pv_tag": "TI-100-H101",
+      "sp_tag": "TS-100-H101",
+      "op_tag": "TO-100-H101",
+      "eng_unit": "degC",
+      "tuning": {
+        "P": 1.2,
+        "I": 30,
+        "D": 0
+      }
+    },
+    {
+      "loop_id": "U100_C101",
+      "loop_name": "Column Pressure Control",
+      "loop_type": "Pressure",
+      "equipment_ref": "U100_C101",
+      "pv_tag": "PI-100-C101",
+      "sp_tag": "PS-100-C101",
+      "op_tag": "PO-100-C101",
+      "eng_unit": "bar",
+      "tuning": {
+        "P": 1.2,
+        "I": 30,
+        "D": 0
+      }
+    },
+    {
+      "loop_id": "U100_V201",
+      "loop_name": "Reflux Drum Level Control",
+      "loop_type": "Level",
+      "equipment_ref": "U100_V201",
+      "pv_tag": "LI-100-V201",
+      "sp_tag": "LS-100-V201",
+      "op_tag": "LO-100-V201",
+      "eng_unit": "%",
+      "tuning": {
+        "P": 1.2,
+        "I": 30,
+        "D": 0
+      }
+    },
+    {
+      "loop_id": "U400_V101",
+      "loop_name": "Cooling Water Flow Control",
+      "loop_type": "Flow",
+      "equipment_ref": "U400_V101",
+      "pv_tag": "FI-400-V101",
+      "sp_tag": "FS-400-V101",
+      "op_tag": "FO-400-V101",
+      "eng_unit": "m3/h",
+      "tuning": {
+        "P": 1.2,
+        "I": 30,
+        "D": 0
+      }
+    },
+    {
+      "loop_id": "U100_K101",
+      "loop_name": "Compressor Speed Control",
+      "loop_type": "Speed",
+      "equipment_ref": "U100_K101",
+      "pv_tag": "SI-100-K101",
+      "sp_tag": "SS-100-K101",
+      "op_tag": "SO-100-K101",
+      "eng_unit": "rpm",
+      "tuning": {
+        "P": 1.2,
+        "I": 30,
+        "D": 0
+      }
+    }
+  ]
+}

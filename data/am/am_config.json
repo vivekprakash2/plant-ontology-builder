@@ -1,0 +1,69 @@
+{
+  "system": "AlarmManagement",
+  "console": "CON-U100",
+  "alarms": [
+    {
+      "alarm_point": "PMP-100-101.VIB",
+      "equipment_ref": "PMP-100-101",
+      "equipment_name": "Crude Charge Pump 101",
+      "measurement": "Vibration",
+      "eng_unit": "mm/s",
+      "limits": {
+        "HH": 11.2,
+        "H": 8.5,
+        "L": null,
+        "LL": null
+      },
+      "priority": "P1",
+      "deadband": 0.3,
+      "rationalization": {
+        "cause": "Bearing wear or hydraulic instability",
+        "consequence": "Pump trip, loss of crude feed to CDU",
+        "action": "Reduce flow, inspect bearing/seal"
+      },
+      "console": "CON-U100"
+    },
+    {
+      "alarm_point": "C-101.VIB",
+      "equipment_ref": "C-101",
+      "equipment_name": "Recycle Gas Compressor 101",
+      "measurement": "Vibration",
+      "eng_unit": "mm/s",
+      "limits": {
+        "HH": 9.0,
+        "H": 6.5,
+        "L": null,
+        "LL": null
+      },
+      "priority": "P1",
+      "deadband": 0.3,
+      "rationalization": {
+        "cause": "Lube oil / mechanical",
+        "consequence": "Compressor trip, recycle loss",
+        "action": "Check lube oil temperature and cooling"
+      },
+      "console": "CON-U100"
+    },
+    {
+      "alarm_point": "TNK-200-101.LVL",
+      "equipment_ref": "TNK-200-101",
+      "equipment_name": "Product Storage Tank 201",
+      "measurement": "Level",
+      "eng_unit": "%",
+      "limits": {
+        "HH": 95.0,
+        "H": 78.5,
+        "L": 20.0,
+        "LL": 10.0
+      },
+      "priority": "P3",
+      "deadband": 0.1,
+      "rationalization": {
+        "cause": "High product level",
+        "consequence": "Potential overfill",
+        "action": "Verify level; review alarm limit (suspected mis-set)"
+      },
+      "console": "CON-U200"
+    }
+  ]
+}

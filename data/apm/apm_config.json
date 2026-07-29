@@ -1,0 +1,79 @@
+{
+  "system": "APM",
+  "plant": "Facility 1",
+  "assets": [
+    {
+      "apm_id": "Pump_001",
+      "display_name": "Facility 1 > Unit 100 > Centrifugal Pump 101",
+      "asset_class": "CentrifugalPump",
+      "criticality": "High",
+      "manufacturer": "Sundyne",
+      "monitored_params": [
+        "Vibration",
+        "BearingTemp",
+        "SuctionPressure",
+        "DischargePressure"
+      ],
+      "health_model": {
+        "model_id": "HM-CENT",
+        "rules": [
+          "vib_trend_rising",
+          "bearing_temp_high",
+          "cavitation_signature"
+        ]
+      }
+    },
+    {
+      "apm_id": "Pump_002",
+      "display_name": "Facility 1 > Unit 100 > Centrifugal Pump 102",
+      "asset_class": "CentrifugalPump",
+      "criticality": "Medium",
+      "manufacturer": "Sundyne",
+      "monitored_params": [
+        "SuctionPressure",
+        "Flow"
+      ],
+      "health_model": {
+        "model_id": "HM-CENT",
+        "rules": [
+          "cavitation_signature"
+        ]
+      }
+    },
+    {
+      "apm_id": "Compressor_005",
+      "display_name": "Facility 1 > Unit 100 > Gas Compressor 101",
+      "asset_class": "Compressor",
+      "criticality": "High",
+      "manufacturer": "Elliott",
+      "monitored_params": [
+        "Vibration",
+        "LubeOilTemp"
+      ],
+      "health_model": {
+        "model_id": "HM-COMP",
+        "rules": [
+          "vib_trend_rising",
+          "lube_temp_high"
+        ]
+      }
+    },
+    {
+      "apm_id": "Exchanger_014",
+      "display_name": "Facility 1 > Unit 100 > Heat Exchanger 101",
+      "asset_class": "HeatExchanger",
+      "criticality": "Medium",
+      "manufacturer": "AlfaLaval",
+      "monitored_params": [
+        "OutletTemp",
+        "FoulingFactor"
+      ],
+      "health_model": {
+        "model_id": "HM-HEAT",
+        "rules": [
+          "fouling_trend"
+        ]
+      }
+    }
+  ]
+}

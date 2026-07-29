@@ -1,0 +1,3 @@
+posting_id,erp_asset_id,linked_wo,posting_date,amount_usd,type
+POST-9001,ERP-FAC1-PMP-100-101,WO-4471,2026-07-23T06:00:00Z,4200,MaintenanceLabor+Parts
+POST-9002,ERP-FAC1-VLV-400-101,WO-4530,2026-07-26T06:00:00Z,850,MaintenanceLabor

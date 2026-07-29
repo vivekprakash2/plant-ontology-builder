@@ -1,0 +1,41 @@
+{
+  "system": "ERP",
+  "assets": [
+    {
+      "erp_asset_id": "ERP-FAC1-PMP-100-101",
+      "description": "Crude Charge Pump A (Main Building)",
+      "cost_center": "CC-U100",
+      "functional_location": "FAC1/U100/ROT",
+      "criticality_class": "A",
+      "acquired": "2019-03-11",
+      "warranty_expiry": "2024-03-11"
+    },
+    {
+      "erp_asset_id": "ERP-FAC1-HEX-100-101",
+      "description": "Preheat Exchanger Shell Side",
+      "cost_center": "CC-U100",
+      "functional_location": "FAC1/U100/HX",
+      "criticality_class": "B",
+      "acquired": "2018-06-01",
+      "warranty_expiry": "2023-06-01"
+    },
+    {
+      "erp_asset_id": "ERP-FAC1-CMP-100-101",
+      "description": "Recycle Gas Compressor Turbine Drive",
+      "cost_center": "CC-U100",
+      "functional_location": "FAC1/U100/ROT",
+      "criticality_class": "A",
+      "acquired": "2017-09-20",
+      "warranty_expiry": "2022-09-20"
+    },
+    {
+      "erp_asset_id": "ERP-FAC1-VLV-400-101",
+      "description": "Boiler Feed Flow Control Valve",
+      "cost_center": "CC-U400",
+      "functional_location": "FAC1/U400/VLV",
+      "criticality_class": "B",
+      "acquired": "2020-01-15",
+      "warranty_expiry": "2025-01-15"
+    }
+  ]
+}

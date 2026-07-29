@@ -1,0 +1,4 @@
+event_id,timestamp,apm_id,event_type,symptom,confidence,recommendation
+APM-E-0007,2026-07-28T00:00:00Z,Pump_001,PredictedFailure,bearing_wear,0.72,Inspect bearing/seal within 72h
+APM-E-0008,2026-07-26T14:00:00Z,Compressor_005,AnomalyDetected,vib_trend_rising,0.68,Investigate vibration; check lube oil cooling
+APM-E-0009,2026-07-13T06:00:00Z,Exchanger_014,DegradationTrend,fouling_trend,0.8,Schedule bundle cleaning

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plant Ontology Console</title>
+<script>
+  // Applied before the stylesheet renders anything, so there's no flash of
+  // the wrong theme. Dark mode is the default when no preference is saved.
+  (function () {
+    var saved = localStorage.getItem("theme");
+    document.documentElement.setAttribute("data-theme", saved === "light" ? "light" : "dark");
+  })();
+</script>
+<link
+  href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+  rel="stylesheet"
+/>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="backdrop-grid" aria-hidden="true"></div>
+  <div class="backdrop-glow" aria-hidden="true"></div>
+
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="brand-block">
+        <img class="brand-logo" src="/logo.svg" alt="Honeywell Technologies">
+        <div>
+          <p class="eyebrow">Hindenberg Refinery</p>
+          <h1>Plant Ontology Console</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light mode">☀️</button>
+        <div class="status-pill" id="statusPill">Live Mode</div>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <section class="chat-panel card">
+        <div class="chat-thread" id="chatThread"></div>
+
+        <div class="composer">
+          <div class="suggestion-row" id="suggestionRow"></div>
+          <div class="composer-input">
+            <textarea
+              id="customQuestion"
+              placeholder="Ask anything about the plant -- e.g. 'Show me everything happening on Unit 100' or 'What's alarming right now?'"
+              rows="1"
+            ></textarea>
+            <button id="runButton" class="primary-btn" type="button">Ask</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="explorer-panel card">
+        <div class="explorer-header">
+          <h2>Plant Ontology Explorer</h2>
+          <p class="muted" id="explorerHint">Browse the unified knowledge graph directly, or ask a question to see it come alive.</p>
+        </div>
+        <div class="explorer-controls">
+          <div class="focus-group" id="graphFilterGroup"></div>
+          <div class="zoom-group">
+            <button id="zoomOutBtn" class="zoom-btn" type="button" aria-label="Zoom out">-</button>
+            <button id="zoomResetBtn" class="zoom-btn" type="button" aria-label="Reset zoom">100%</button>
+            <button id="zoomInBtn" class="zoom-btn" type="button" aria-label="Zoom in">+</button>
+          </div>
+        </div>
+        <div class="graph-viewport" id="graphViewport">
+          <div id="plantGraph" class="relationship-graph"></div>
+        </div>
+        <div class="inspector" id="inspector">
+          <p class="muted">Click any node to inspect it -- or ask a question to auto-focus its evidence.</p>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hindenberg Refinery — Interactive PFD (Hackathon Scenario)</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#30363d;
+    --text:#e6edf3; --muted:#9da7b3; --accent:#58a6ff;
+    --pipe:#5b8db8; --pipe-hot:#e06c4f; --pipe-vap:#c9a227; --pipe-steam:#8b7fd6;
+    --eq:#233045; --eq-stroke:#4b6382; --star:#f0b429;
+    --sev-crit:#f85149; --sev-warn:#d29922; --sev-info:#3fb950; --sev-config:#a371f7;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{padding:18px 26px;border-bottom:1px solid var(--line);}
+  header h1{margin:0;font-size:22px;}
+  header p{margin:6px 0 0;color:var(--muted);font-size:13px;}
+  .wrap{display:flex;gap:0;align-items:stretch;min-height:calc(100vh - 78px);}
+  .diagram{flex:1;min-width:0;position:relative;overflow:auto;}
+  .side{width:360px;flex:none;border-left:1px solid var(--line);background:var(--panel);padding:16px 18px;overflow:auto;}
+  svg{display:block;width:1480px;height:820px;}
+
+  .eq rect,.eq circle,.eq ellipse,.eq polygon,.eq path{cursor:pointer;transition:filter .15s,stroke .15s;}
+  .eq:hover .body{filter:brightness(1.35);stroke:var(--accent);}
+  .eq text{fill:var(--text);font-size:12px;font-weight:600;pointer-events:none;text-anchor:middle;}
+  .eq .sub{fill:var(--muted);font-size:10px;font-weight:400;}
+  .body{fill:var(--eq);stroke:var(--eq-stroke);stroke-width:1.5;}
+  .star .body{stroke:var(--star);stroke-width:2.4;}
+  .badge{font-size:10px;font-weight:700;fill:#0d1117;}
+  .flow{fill:none;stroke-width:3;marker-end:url(#arrow);}
+  .flow.crude{stroke:var(--pipe);}
+  .flow.hot{stroke:var(--pipe-hot);}
+  .flow.vap{stroke:var(--pipe-vap);}
+  .flow.steam{stroke:var(--pipe-steam);stroke-dasharray:6 4;}
+  .flabel{fill:var(--muted);font-size:10px;text-anchor:middle;}
+
+  .dot{r:7;stroke:#0d1117;stroke-width:1.5;cursor:pointer;}
+  .dot.crit{fill:var(--sev-crit);}
+  .dot.warn{fill:var(--sev-warn);}
+  .dot.info{fill:var(--sev-info);}
+  .dot.config{fill:var(--sev-config);}
+  .pulse{animation:p 1.6s infinite;}
+  @keyframes p{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
+
+  .tip{position:fixed;z-index:50;max-width:340px;background:var(--panel2);border:1px solid var(--accent);
+    border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.5;pointer-events:none;
+    box-shadow:0 8px 28px rgba(0,0,0,.5);display:none;}
+  .tip h4{margin:0 0 6px;font-size:13px;color:var(--accent);}
+  .tip table{width:100%;border-collapse:collapse;margin-top:6px;}
+  .tip td{padding:2px 4px;border-top:1px solid var(--line);vertical-align:top;}
+  .tip td.k{color:var(--muted);white-space:nowrap;}
+  .tip .sc{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);}
+
+  .side h3{margin:4px 0 8px;font-size:14px;}
+  .side h4{margin:18px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+  .leg{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;}
+  .swatch{width:22px;height:4px;border-radius:2px;flex:none;}
+  .chip{width:12px;height:12px;border-radius:50%;flex:none;}
+  .scn{background:var(--panel2);border:1px solid var(--line);border-left-width:4px;border-radius:6px;padding:10px 12px;margin:8px 0;font-size:12px;cursor:pointer;transition:border-color .15s;}
+  .scn:hover{border-color:var(--accent);}
+  .scn b{display:block;margin-bottom:3px;font-size:12.5px;}
+  .scn .q{color:var(--muted);font-style:italic;margin-top:5px;}
+  .scn.crit{border-left-color:var(--sev-crit);}
+  .scn.warn{border-left-color:var(--sev-warn);}
+  .scn.info{border-left-color:var(--sev-info);}
+  .scn.config{border-left-color:var(--sev-config);}
+  .hl .body{stroke:var(--accent)!important;stroke-width:3.4!important;filter:brightness(1.4);}
+  .foot{color:var(--muted);font-size:11px;margin-top:16px;line-height:1.5;}
+  code{background:#0d1117;padding:1px 5px;border-radius:4px;font-size:11px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hindenberg Refinery — Crude Distillation (Unit 100) &amp; Utilities</h1>
+  <p>Interactive Process Flow Diagram for the AI-Powered Plant Ontology Builder hackathon. Hover equipment for its cross-application aliases &amp; tags. Colored dots = hidden scenarios planted in the transactional data.</p>
+</header>
+
+<div class="wrap">
+  <div class="diagram">
+    <svg viewBox="0 0 1480 820" id="pfd">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#7d8998"/>
+        </marker>
+      </defs>
+
+      <!-- ===== FLOW LINES (drawn first, behind equipment) ===== -->
+      <!-- crude tank -> charge pump -->
+      <path class="flow crude" d="M140,300 L215,300"/>
+      <!-- charge pump -> preheat exchanger -->
+      <path class="flow crude" d="M300,300 L370,300"/>
+      <!-- preheat -> heater -->
+      <path class="flow hot" d="M470,300 L545,300"/>
+      <!-- heater -> column feed -->
+      <path class="flow hot" d="M640,300 L700,300 L700,430 L775,430"/>
+      <!-- column overhead vapor -> condenser -->
+      <path class="flow vap" d="M840,240 L840,150 L1005,150"/>
+      <!-- condenser -> reflux drum -->
+      <path class="flow vap" d="M1100,150 L1175,150 L1175,235"/>
+      <!-- reflux drum -> reflux pump -->
+      <path class="flow crude" d="M1175,320 L1175,380 L1115,380"/>
+      <!-- reflux pump -> back to column (right side, aligned) -->
+      <path class="flow crude" d="M1039,380 L905,380"/>
+      <!-- reflux drum -> product out (naphtha) -->
+      <path class="flow crude" d="M1225,278 L1310,278"/>
+      <!-- kerosene side draw -->
+      <path class="flow hot" d="M905,325 L1310,325"/>
+      <!-- diesel side draw -->
+      <path class="flow hot" d="M905,490 L1310,490"/>
+      <!-- column bottoms -> residue product -->
+      <path class="flow hot" d="M840,560 L840,555 L840,640 L1310,640"/>
+      <!-- stripping steam into column bottom -->
+      <path class="flow steam" d="M740,700 L740,548 L775,548"/>
+      <!-- recycle gas: reflux drum overhead -> compressor -->
+      <path class="flow vap" d="M1175,235 L1175,45 L430,45 L430,150"/>
+      <!-- compressor outlet -> merges into crude/preheat feed line -->
+      <path class="flow vap" d="M430,225 L430,250 L335,250 L335,300"/>
+      <!-- steam / BFW utility to heater -->
+      <path class="flow steam" d="M592,720 L592,340"/>
+      <!-- cooling water to condenser (from CV-400) -->
+      <path class="flow steam" d="M1052,720 L1052,192"/>
+
+      <text class="flabel" x="175" y="290">crude feed</text>
+      <text class="flabel" x="335" y="290">to preheat</text>
+      <text class="flabel" x="507" y="290">preheated</text>
+      <text class="flabel" x="920" y="120">overhead vapor</text>
+      <text class="flabel" x="970" y="372">reflux return</text>
+      <text class="flabel" x="1230" y="268">naphtha</text>
+      <text class="flabel" x="1105" y="315">kerosene draw</text>
+      <text class="flabel" x="1105" y="480">diesel draw</text>
+      <text class="flabel" x="1150" y="632">atm. residue (bottoms)</text>
+      <text class="flabel" x="800" y="38">recycle gas</text>
+      <text class="flabel" x="740" y="716">stripping steam</text>
+      <text class="flabel" x="560" y="716">steam / BFW</text>
+      <text class="flabel" x="1102" y="695">cooling water</text>
+
+      <!-- ===== EQUIPMENT ===== -->
+      <!-- Crude Tank -->
+      <g class="eq" data-id="TK-CRUDE">
+        <rect class="body" x="55" y="255" width="85" height="90" rx="6"/>
+        <text x="97" y="295">Crude</text>
+        <text x="97" y="312">Feed Tank</text>
+        <text class="sub" x="97" y="332">TK-100</text>
+      </g>
+
+      <!-- Charge Pump P-101 (STAR + hero scenario) -->
+      <g class="eq star" data-id="P-101">
+        <circle class="body" cx="257" cy="300" r="42"/>
+        <text x="257" y="296">Charge</text>
+        <text x="257" y="312">Pump</text>
+        <text class="sub" x="257" y="330">P-101 ⭐</text>
+      </g>
+      <circle class="dot crit pulse" cx="288" cy="266" r="7" data-scn="s1"/>
+
+      <!-- Preheat Exchanger E-101 (fouling scenario) -->
+      <g class="eq" data-id="E-101">
+        <rect class="body" x="370" y="262" width="100" height="76" rx="6"/>
+        <text x="420" y="296">Preheat</text>
+        <text x="420" y="312">Exchanger</text>
+        <text class="sub" x="420" y="330">E-101</text>
+      </g>
+      <circle class="dot warn" cx="458" cy="272" r="7" data-scn="s2"/>
+
+      <!-- Fired Heater H-101 -->
+      <g class="eq" data-id="H-101">
+        <rect class="body" x="545" y="255" width="95" height="90" rx="6"/>
+        <text x="592" y="290">Fired</text>
+        <text x="592" y="306">Heater</text>
+        <text class="sub" x="592" y="326">H-101</text>
+      </g>
+
+      <!-- Distillation Column C-101 (flooding cascade) -->
+      <g class="eq" data-id="C-101">
+        <rect class="body" x="775" y="240" width="130" height="320" rx="18"/>
+        <text x="840" y="392">Distillation</text>
+        <text x="840" y="410">Column</text>
+        <text class="sub" x="840" y="430">C-101</text>
+      </g>
+      <circle class="dot warn" cx="890" cy="256" r="7" data-scn="s3"/>
+
+      <!-- Overhead Condenser E-301 -->
+      <g class="eq" data-id="E-301">
+        <rect class="body" x="1005" y="112" width="95" height="76" rx="6"/>
+        <text x="1052" y="146">Overhead</text>
+        <text x="1052" y="162">Condenser</text>
+        <text class="sub" x="1052" y="180">E-301</text>
+      </g>
+
+      <!-- Reflux Drum V-201 -->
+      <g class="eq" data-id="V-201">
+        <rect class="body" x="1125" y="235" width="100" height="85" rx="30"/>
+        <text x="1175" y="272">Reflux</text>
+        <text x="1175" y="288">Drum</text>
+        <text class="sub" x="1175" y="306">V-201</text>
+      </g>
+
+      <!-- Reflux Pump P-102 -->
+      <g class="eq" data-id="P-102">
+        <circle class="body" cx="1077" cy="380" r="38"/>
+        <text x="1077" y="378">Reflux</text>
+        <text x="1077" y="394">Pump</text>
+        <text class="sub" x="1077" y="410">P-102</text>
+      </g>
+      <circle class="dot info" cx="1104" cy="352" r="7" data-scn="s3"/>
+
+      <!-- Recycle Gas Compressor K-101 (distractor) -->
+      <g class="eq" data-id="K-101">
+        <rect class="body" x="370" y="150" width="120" height="75" rx="6"/>
+        <text x="430" y="182">Recycle Gas</text>
+        <text x="430" y="198">Compressor</text>
+        <text class="sub" x="430" y="216">K-101 / C-101</text>
+      </g>
+      <circle class="dot crit" cx="476" cy="160" r="7" data-scn="s4"/>
+
+      <!-- Product Storage Tank TK-201 (alarm-flood config issue) -->
+      <g class="eq" data-id="TK-201">
+        <rect class="body" x="1310" y="595" width="110" height="90" rx="6"/>
+        <text x="1365" y="632">Product</text>
+        <text x="1365" y="648">Storage Tank</text>
+        <text class="sub" x="1365" y="668">TK-201</text>
+      </g>
+      <circle class="dot config" cx="1405" cy="605" r="7" data-scn="s5"/>
+
+      <!-- Steam / BFW control valve CV-400 (utility, also feeds cooling) -->
+      <g class="eq" data-id="CV-400">
+        <polygon class="body" points="560,720 624,700 624,760 560,740"/>
+        <text x="592" y="726">BFW/CW</text>
+        <text class="sub" x="592" y="744">CV-400</text>
+      </g>
+      <circle class="dot warn" cx="620" cy="704" r="6" data-scn="s4"/>
+
+      <!-- naphtha product tag -->
+      <g class="eq" data-id="PROD-NAPHTHA">
+        <rect class="body" x="1310" y="252" width="120" height="52" rx="6"/>
+        <text x="1370" y="276">Naphtha</text>
+        <text class="sub" x="1370" y="294">to Unit 300</text>
+      </g>
+      <!-- kerosene product -->
+      <g class="eq" data-id="PROD-KERO">
+        <rect class="body" x="1310" y="300" width="120" height="50" rx="6"/>
+        <text x="1370" y="322">Kerosene</text>
+        <text class="sub" x="1370" y="340">to product</text>
+      </g>
+      <!-- diesel product -->
+      <g class="eq" data-id="PROD-DIESEL">
+        <rect class="body" x="1310" y="465" width="120" height="50" rx="6"/>
+        <text x="1370" y="487">Diesel</text>
+        <text class="sub" x="1370" y="505">to Unit 200</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="side">
+    <h3>Legend</h3>
+    <div class="leg"><span class="swatch" style="background:var(--pipe)"></span> Liquid / crude line</div>
+    <div class="leg"><span class="swatch" style="background:var(--pipe-hot)"></span> Hot process line</div>
+    <div class="leg"><span class="swatch" style="background:var(--pipe-vap)"></span> Vapor / overhead line</div>
+    <div class="leg"><span class="swatch" style="background:var(--pipe-steam)"></span> Utility (steam/BFW/CW)</div>
+    <div class="leg" style="margin-top:10px"><span class="chip" style="background:var(--sev-crit)"></span> Critical scenario</div>
+    <div class="leg"><span class="chip" style="background:var(--sev-warn)"></span> Warning / degradation</div>
+    <div class="leg"><span class="chip" style="background:var(--sev-info)"></span> Contributing / secondary</div>
+    <div class="leg"><span class="chip" style="background:var(--sev-config)"></span> Config problem (not process)</div>
+
+    <h4>Hidden Scenarios (click to highlight)</h4>
+    <div class="scn crit" data-scn="s1" data-eq="P-101"><b>⭐ S1 — P-101 vibration (FINALE)</b>
+      Seal replaced 6 days ago + flow setpoint raised +12% last shift.
+      <div class="q">"Why is Crude Charge Pump P-101 vibrating?"</div></div>
+    <div class="scn warn" data-scn="s2" data-eq="E-101"><b>S2 — E-101 exchanger fouling</b>
+      Slow outlet-temp decline over weeks; heater burns more fuel gas; cleaning WO deferred twice.
+      <div class="q">"Why is heater H-101 fuel consumption rising?"</div></div>
+    <div class="scn warn" data-scn="s3" data-eq="C-101"><b>S3 — C-101 flooding cascade</b>
+      High column dP caused by cold feed (from S2) + reflux pump P-102 cavitation. Multi-hop.
+      <div class="q">"Why is column C-101 differential pressure high?"</div></div>
+    <div class="scn crit" data-scn="s4" data-eq="K-101"><b>S4 — K-101 compressor (DISTRACTOR)</b>
+      Looks like P-101 (high vibration) but caused by high lube-oil temp from stuck cooling valve CV-400.
+      <div class="q">"Is K-101's vibration the same problem as P-101?"</div></div>
+    <div class="scn config" data-scn="s5" data-eq="TK-201"><b>S5 — TK-201 alarm flood (CONFIG)</b>
+      Nuisance high-level alarms from a mis-set alarm limit in AM — a configuration issue, not a real process upset.
+      <div class="q">"Why are there so many alarms on TK-201?"</div></div>
+
+    <div class="foot">
+      <b>For teams:</b> Each equipment carries a different ID in every application (AM / APM / DCS / Historian / CMMS / ERP). Hover any unit to see its aliases — that mismatch is the entity-resolution challenge. The dots mark causal chains hidden across the transactional data your agent must discover.
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+// ---- Cross-application aliases + planted context per equipment ----
+const EQ = {
+  "TK-CRUDE":{name:"Crude Feed Tank TK-100",am:"—",apm:"Tank_100",dcs:"LI-100",hist:"FAC1.UNIT100.CRUDE_TANK.LEVEL",cmms:"—",erp:"—",note:"Feed source for the CDU."},
+  "P-101":{name:"⭐ Crude Charge Pump P-101",am:"PMP-100-101",apm:"Pump_001",dcs:"FIC-100-101",hist:"FAC1.UNIT100.CENTRIFUGAL_PUMP_101.*",cmms:"EQ-1042 (Crude Charge Pump A)",erp:"ERP-FAC1-PMP-100-101",scn:"s1",scnTxt:"S1 FINALE — vibration rising. Clues: seal replacement WO 6 days ago + operator +12% setpoint last shift."},
+  "E-101":{name:"Preheat Exchanger E-101",am:"HEX-100-101",apm:"Exchanger_014",dcs:"TIC-100-102",hist:"FAC1.UNIT100.HEAT_EXCHANGER_101.*",cmms:"EQ-2210",erp:"ERP-FAC1-HEX-100-101",scn:"s2",scnTxt:"S2 — outlet temp slowly declining (fouling). Cleaning work order deferred twice."},
+  "H-101":{name:"Fired Heater H-101",am:"HTR-100-101",apm:"Heater_003",dcs:"TIC-100-105",hist:"FAC1.UNIT100.FIRED_HEATER_101.*",cmms:"EQ-3001",erp:"ERP-FAC1-HTR-100-101",note:"Fuel-gas consumption is the KPI that drifts up when E-101 fouls (S2)."},
+  "C-101":{name:"Distillation Column C-101",am:"COL-100-101",apm:"Column_002",dcs:"PIC-100-110 / PDI-100-111",hist:"FAC1.UNIT100.COLUMN_101.*",cmms:"EQ-4100",erp:"ERP-FAC1-COL-100-101",scn:"s3",scnTxt:"S3 — high differential pressure (flooding). Cascade from cold feed (S2) + P-102 cavitation."},
+  "E-301":{name:"Overhead Condenser E-301",am:"HEX-300-101",apm:"Exchanger_009",dcs:"TIC-300-101",hist:"FAC1.UNIT300.HEAT_EXCHANGER_101.*",cmms:"EQ-2255",erp:"ERP-FAC1-HEX-300-101",note:"Cooling-water side fed via CV-400."},
+  "V-201":{name:"Reflux Drum V-201",am:"DRM-100-201",apm:"Vessel_021",dcs:"LIC-100-201",hist:"FAC1.UNIT100.REFLUX_DRUM_201.*",cmms:"EQ-5001",erp:"ERP-FAC1-DRM-100-201",note:"Level control feeds reflux pump P-102."},
+  "P-102":{name:"Reflux Pump P-102",am:"PMP-100-102",apm:"Pump_002",dcs:"FIC-100-120",hist:"FAC1.UNIT100.PUMP_102.*",cmms:"EQ-1043",erp:"ERP-FAC1-PMP-100-102",scn:"s3",scnTxt:"S3 secondary — intermittent cavitation (suction pressure low), contributes to column dP."},
+  "K-101":{name:"Recycle Gas Compressor K-101",am:"CMP-100-101",apm:"Compressor_005",dcs:"SIC-100-101",hist:"FAC1.UNIT100.GAS_COMPRESSOR_101.*",cmms:"EQ-6001",erp:"ERP-FAC1-CMP-100-101",scn:"s4",scnTxt:"S4 DISTRACTOR — high vibration too, but root cause is lube-oil overtemp from stuck CV-400. Different from P-101."},
+  "TK-201":{name:"Product Storage Tank TK-201",am:"TNK-200-101",apm:"Tank_201",dcs:"LI-200-101",hist:"FAC1.UNIT200.STORAGE_TANK_101.*",cmms:"EQ-7001",erp:"ERP-FAC1-TNK-200-101",scn:"s5",scnTxt:"S5 CONFIG — flood of high-level alarms from a mis-set AM alarm limit. Not a process upset."},
+  "CV-400":{name:"BFW / Cooling-Water Control Valve CV-400",am:"VLV-400-101",apm:"Valve_101",dcs:"FIC-400-101",hist:"FAC1.UNIT400.CONTROL_VALVE_101.*",cmms:"EQ-8001",erp:"ERP-FAC1-VLV-400-101",scn:"s4",scnTxt:"S4 root — valve sticking, restricts cooling water to K-101 lube-oil cooler."},
+  "PROD-NAPHTHA":{name:"Naphtha Product Draw",am:"—",apm:"—",dcs:"FIC-100-130",hist:"FAC1.UNIT100.NAPHTHA_DRAW.*",cmms:"—",erp:"—",note:"Overhead naphtha routed to Unit 300 treating."},
+  "PROD-KERO":{name:"Kerosene Side Draw",am:"—",apm:"—",dcs:"TIC-100-140 / FIC-100-141",hist:"FAC1.UNIT100.KERO_DRAW.*",cmms:"—",erp:"—",note:"Upper side draw. Draw temperature is a product-quality control point."},
+  "PROD-DIESEL":{name:"Diesel Side Draw",am:"—",apm:"—",dcs:"TIC-100-150 / FIC-100-151",hist:"FAC1.UNIT100.DIESEL_DRAW.*",cmms:"—",erp:"—",note:"Lower side draw, routed to Unit 200 blending/storage."}
+};
+
+const tip = document.getElementById('tip');
+function row(k,v){ if(!v||v==="—") return v?`<tr><td class="k">${k}</td><td>—</td></tr>`:""; return `<tr><td class="k">${k}</td><td><code>${v}</code></td></tr>`; }
+function showTip(e,id){
+  const d = EQ[id]; if(!d) return;
+  let html = `<h4>${d.name}</h4><table>
+    ${row('Alarm Mgmt',d.am)}${row('APM',d.apm)}${row('DCS loop',d.dcs)}
+    ${row('Historian',d.hist)}${row('CMMS',d.cmms)}${row('ERP',d.erp)}</table>`;
+  if(d.scnTxt) html += `<div class="sc">🔎 ${d.scnTxt}</div>`;
+  else if(d.note) html += `<div class="sc">${d.note}</div>`;
+  tip.innerHTML = html; tip.style.display='block';
+  const pad=14; let x=e.clientX+pad, y=e.clientY+pad;
+  const r=tip.getBoundingClientRect();
+  if(x+r.width>window.innerWidth) x=e.clientX-r.width-pad;
+  if(y+r.height>window.innerHeight) y=window.innerHeight-r.height-pad;
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+document.querySelectorAll('.eq').forEach(g=>{
+  const id=g.getAttribute('data-id');
+  g.addEventListener('mousemove',e=>showTip(e,id));
+  g.addEventListener('mouseleave',()=>tip.style.display='none');
+});
+document.querySelectorAll('.dot').forEach(dt=>{
+  dt.addEventListener('mouseleave',()=>tip.style.display='none');
+});
+
+// scenario highlight
+function clearHl(){ document.querySelectorAll('.eq.hl').forEach(g=>g.classList.remove('hl')); }
+document.querySelectorAll('.scn').forEach(s=>{
+  s.addEventListener('click',()=>{
+    clearHl();
+    const eq=s.getAttribute('data-eq');
+    const scn=s.getAttribute('data-scn');
+    // highlight primary equipment + any equipment sharing the scenario
+    document.querySelectorAll('.eq').forEach(g=>{
+      const id=g.getAttribute('data-id');
+      if(id===eq || (EQ[id]&&EQ[id].scn===scn)) g.classList.add('hl');
+    });
+  });
+});
+</script>
+</body>
+</html>

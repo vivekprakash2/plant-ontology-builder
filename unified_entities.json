@@ -1,0 +1,661 @@
+[
+  {
+    "unified_id": "ASSET-001",
+    "canonical_name": "Recycle Gas Compressor 101",
+    "confidence": 0.773,
+    "system_count": 6,
+    "members": [
+      {
+        "system": "AM",
+        "local_id": "C-101",
+        "name": "Recycle Gas Compressor 101",
+        "unit": "100",
+        "asset_class": "Compressor",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "alarm_point": "C-101.VIB",
+          "priority": "P1",
+          "console": "CON-U100"
+        }
+      },
+      {
+        "system": "APM",
+        "local_id": "Compressor_005",
+        "name": "Facility 1 > Unit 100 > Gas Compressor 101",
+        "unit": "100",
+        "asset_class": "Compressor",
+        "equipment_number": "101",
+        "criticality": "High",
+        "attributes": {
+          "manufacturer": "Elliott",
+          "monitored_params": [
+            "Vibration",
+            "LubeOilTemp"
+          ],
+          "raw_asset_class": "Compressor"
+        }
+      },
+      {
+        "system": "CMMS",
+        "local_id": "EQ-6001",
+        "name": "H2 Recycle Compressor",
+        "unit": "100",
+        "asset_class": "Compressor",
+        "equipment_number": null,
+        "criticality": "High",
+        "attributes": {
+          "functional_location": "FAC1-U100-ROT",
+          "bom": [
+            {
+              "part": "LO-FILT-9",
+              "desc": "Lube oil filter"
+            }
+          ],
+          "pm_schedule": [
+            {
+              "pm_id": "PM-LO-M",
+              "task": "Lube oil check",
+              "interval_days": 30
+            }
+          ],
+          "work_order_notes": [],
+          "equipment_number_source": null
+        }
+      },
+      {
+        "system": "DCS",
+        "local_id": "U100_K101",
+        "name": "Compressor Speed Control",
+        "unit": "100",
+        "asset_class": "Compressor",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "pv_tag": "SI-100-K101",
+          "sp_tag": "SS-100-K101",
+          "op_tag": "SO-100-K101",
+          "loop_type": "Speed"
+        }
+      },
+      {
+        "system": "ERP",
+        "local_id": "ERP-FAC1-CMP-100-101",
+        "name": "Recycle Gas Compressor Turbine Drive",
+        "unit": "100",
+        "asset_class": "Compressor",
+        "equipment_number": "101",
+        "criticality": "High",
+        "attributes": {
+          "functional_location": "FAC1/U100/ROT",
+          "cost_center": "CC-U100"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT100.GAS_COMPRESSOR_101",
+        "name": "Recycle Gas Compressor Lube Oil Temp",
+        "unit": "100",
+        "asset_class": "Compressor",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT100.GAS_COMPRESSOR_101.LUBE_01",
+            "FAC1.UNIT100.GAS_COMPRESSOR_101.VIB_02"
+          ],
+          "descriptions": [
+            "Recycle Gas Compressor Lube Oil Temp",
+            "Recycle Gas Compressor Vibration"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "criticality match",
+      "equipment_number match",
+      "name similarity 0.62 ('Recycle Gas Compressor 101' ~ 'Facility 1 > Unit 100 > Gas Compressor 101')",
+      "name similarity 0.63 ('H2 Recycle Compressor' ~ 'Recycle Gas Compressor Turbine Drive')",
+      "name similarity 0.63 ('Recycle Gas Compressor Lube Oil Temp' ~ 'H2 Recycle Compressor')",
+      "name similarity 0.74 ('Recycle Gas Compressor 101' ~ 'Recycle Gas Compressor Lube Oil Temp')",
+      "name similarity 0.74 ('Recycle Gas Compressor 101' ~ 'Recycle Gas Compressor Turbine Drive')",
+      "name similarity 0.77 ('Recycle Gas Compressor 101' ~ 'H2 Recycle Compressor')",
+      "name similarity 0.81 ('Recycle Gas Compressor Lube Oil Temp' ~ 'Recycle Gas Compressor Turbine Drive')",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-002",
+    "canonical_name": "Crude Charge Pump 101",
+    "confidence": 0.778,
+    "system_count": 6,
+    "members": [
+      {
+        "system": "AM",
+        "local_id": "PMP-100-101",
+        "name": "Crude Charge Pump 101",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "alarm_point": "PMP-100-101.VIB",
+          "priority": "P1",
+          "console": "CON-U100"
+        }
+      },
+      {
+        "system": "APM",
+        "local_id": "Pump_001",
+        "name": "Facility 1 > Unit 100 > Centrifugal Pump 101",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": "101",
+        "criticality": "High",
+        "attributes": {
+          "manufacturer": "Sundyne",
+          "monitored_params": [
+            "Vibration",
+            "BearingTemp",
+            "SuctionPressure",
+            "DischargePressure"
+          ],
+          "raw_asset_class": "CentrifugalPump"
+        }
+      },
+      {
+        "system": "CMMS",
+        "local_id": "EQ-1042",
+        "name": "Crude Charge Pump A",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": null,
+        "criticality": "High",
+        "attributes": {
+          "functional_location": "FAC1-U100-PUMPS",
+          "bom": [
+            {
+              "part": "MECH-SEAL-32",
+              "desc": "Mechanical seal cartridge"
+            },
+            {
+              "part": "BRG-6312",
+              "desc": "Thrust bearing"
+            }
+          ],
+          "pm_schedule": [
+            {
+              "pm_id": "PM-SEAL-Q",
+              "task": "Seal inspection",
+              "interval_days": 90
+            }
+          ],
+          "work_order_notes": [
+            "Replaced mechanical seal. Alignment checked but shim kit was short; flagged for recheck at next opportunity.",
+            "Routine seal inspection, no issues found."
+          ],
+          "equipment_number_source": null
+        }
+      },
+      {
+        "system": "DCS",
+        "local_id": "U100_P101",
+        "name": "Crude Charge Pump Flow Control",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "pv_tag": "FI-100-P101",
+          "sp_tag": "FS-100-P101",
+          "op_tag": "FO-100-P101",
+          "loop_type": "Flow"
+        }
+      },
+      {
+        "system": "ERP",
+        "local_id": "ERP-FAC1-PMP-100-101",
+        "name": "Crude Charge Pump A (Main Building)",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": "101",
+        "criticality": "High",
+        "attributes": {
+          "functional_location": "FAC1/U100/ROT",
+          "cost_center": "CC-U100"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101",
+        "name": "Crude Charge Pump 101 Vibration",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01",
+            "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.FLOW_01",
+            "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.BTMP_01",
+            "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.PSUC_01"
+          ],
+          "descriptions": [
+            "Crude Charge Pump 101 Vibration",
+            "Crude Charge Pump 101 Discharge Flow",
+            "Crude Charge Pump 101 Bearing Temp",
+            "Crude Charge Pump 101 Suction Press"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "criticality match",
+      "equipment_number match",
+      "hard FK: ERP posting POST-9001 -> work order WO-4471 -> CMMS asset EQ-1042",
+      "name similarity 0.62 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.64 ('Crude Charge Pump 101' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.69 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump 101 Vibration')",
+      "name similarity 0.70 ('Crude Charge Pump 101 Vibration' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.70 ('Crude Charge Pump A' ~ 'Crude Charge Pump A (Main Building)')",
+      "name similarity 0.71 ('Crude Charge Pump 101' ~ 'Crude Charge Pump Flow Control')",
+      "name similarity 0.73 ('Crude Charge Pump Flow Control' ~ 'Crude Charge Pump A')",
+      "name similarity 0.76 ('Crude Charge Pump 101 Vibration' ~ 'Crude Charge Pump A')",
+      "name similarity 0.81 ('Crude Charge Pump 101' ~ 'Crude Charge Pump 101 Vibration')",
+      "name similarity 0.90 ('Crude Charge Pump 101' ~ 'Crude Charge Pump A')",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-003",
+    "canonical_name": "Facility 1 > Unit 100 > Heat Exchanger 101",
+    "confidence": 0.865,
+    "system_count": 4,
+    "members": [
+      {
+        "system": "APM",
+        "local_id": "Exchanger_014",
+        "name": "Facility 1 > Unit 100 > Heat Exchanger 101",
+        "unit": "100",
+        "asset_class": "HeatExchanger",
+        "equipment_number": "101",
+        "criticality": "Medium",
+        "attributes": {
+          "manufacturer": "AlfaLaval",
+          "monitored_params": [
+            "OutletTemp",
+            "FoulingFactor"
+          ],
+          "raw_asset_class": "HeatExchanger"
+        }
+      },
+      {
+        "system": "CMMS",
+        "local_id": "EQ-2210",
+        "name": "Crude Preheat Bundle",
+        "unit": "100",
+        "asset_class": "HeatExchanger",
+        "equipment_number": "101",
+        "criticality": "Medium",
+        "attributes": {
+          "functional_location": "FAC1-U100-HX",
+          "bom": [
+            {
+              "part": "GSKT-14",
+              "desc": "Channel gasket"
+            }
+          ],
+          "pm_schedule": [
+            {
+              "pm_id": "PM-CLEAN-6M",
+              "task": "Bundle cleaning",
+              "interval_days": 180
+            }
+          ],
+          "work_order_notes": [
+            "Exchanger E-101 bundle cleaning deferred twice due to unit online; fouling suspected, outlet temperature drifting down."
+          ],
+          "equipment_number_source": "work_order_notes"
+        }
+      },
+      {
+        "system": "ERP",
+        "local_id": "ERP-FAC1-HEX-100-101",
+        "name": "Preheat Exchanger Shell Side",
+        "unit": "100",
+        "asset_class": "HeatExchanger",
+        "equipment_number": "101",
+        "criticality": "Medium",
+        "attributes": {
+          "functional_location": "FAC1/U100/HX",
+          "cost_center": "CC-U100"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT100.HEAT_EXCHANGER_101",
+        "name": "Preheat Exchanger 101 Outlet Temp",
+        "unit": "100",
+        "asset_class": "HeatExchanger",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT100.HEAT_EXCHANGER_101.TOUT_01"
+          ],
+          "descriptions": [
+            "Preheat Exchanger 101 Outlet Temp"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "criticality match",
+      "equipment_number match",
+      "name similarity 0.66 ('Preheat Exchanger 101 Outlet Temp' ~ 'Preheat Exchanger Shell Side')",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-004",
+    "canonical_name": "Boiler Feed Flow Control Valve",
+    "confidence": 0.738,
+    "system_count": 4,
+    "members": [
+      {
+        "system": "CMMS",
+        "local_id": "EQ-8001",
+        "name": "Utility CW Control Valve",
+        "unit": "400",
+        "asset_class": "Valve",
+        "equipment_number": null,
+        "criticality": "Medium",
+        "attributes": {
+          "functional_location": "FAC1-U400-VLV",
+          "bom": [
+            {
+              "part": "TRIM-KIT-4",
+              "desc": "Valve trim kit"
+            }
+          ],
+          "pm_schedule": [
+            {
+              "pm_id": "PM-VLV-Y",
+              "task": "Valve stroke test",
+              "interval_days": 365
+            }
+          ],
+          "work_order_notes": [
+            "Cooling water valve CV-400 reported sticking; not tracking setpoint. Suspect trim fouling. Parts on order."
+          ],
+          "equipment_number_source": null
+        }
+      },
+      {
+        "system": "DCS",
+        "local_id": "U400_V101",
+        "name": "Cooling Water Flow Control",
+        "unit": "400",
+        "asset_class": null,
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "pv_tag": "FI-400-V101",
+          "sp_tag": "FS-400-V101",
+          "op_tag": "FO-400-V101",
+          "loop_type": "Flow"
+        }
+      },
+      {
+        "system": "ERP",
+        "local_id": "ERP-FAC1-VLV-400-101",
+        "name": "Boiler Feed Flow Control Valve",
+        "unit": "400",
+        "asset_class": "Valve",
+        "equipment_number": "101",
+        "criticality": "Medium",
+        "attributes": {
+          "functional_location": "FAC1/U400/VLV",
+          "cost_center": "CC-U400"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT400.CONTROL_VALVE_101",
+        "name": "Cooling Water Flow (CV-400)",
+        "unit": "400",
+        "asset_class": "Valve",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT400.CONTROL_VALVE_101.CWFL_01"
+          ],
+          "descriptions": [
+            "Cooling Water Flow (CV-400)"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "criticality match",
+      "equipment_number match",
+      "hard FK: ERP posting POST-9002 -> work order WO-4530 -> CMMS asset EQ-8001",
+      "name similarity 0.61 ('Cooling Water Flow Control' ~ 'Boiler Feed Flow Control Valve')",
+      "name similarity 0.67 ('Utility CW Control Valve' ~ 'Boiler Feed Flow Control Valve')",
+      "name similarity 0.75 ('Cooling Water Flow Control' ~ 'Cooling Water Flow (CV-400)')",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-005",
+    "canonical_name": "Product Storage Tank 201",
+    "confidence": 0.928,
+    "system_count": 2,
+    "members": [
+      {
+        "system": "AM",
+        "local_id": "TNK-200-101",
+        "name": "Product Storage Tank 201",
+        "unit": "200",
+        "asset_class": "Tank",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "alarm_point": "TNK-200-101.LVL",
+          "priority": "P3",
+          "console": "CON-U200"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT200.STORAGE_TANK_101",
+        "name": "Product Storage Tank 201 Level",
+        "unit": "200",
+        "asset_class": "Tank",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT200.STORAGE_TANK_101.LVL_01"
+          ],
+          "descriptions": [
+            "Product Storage Tank 201 Level"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "equipment_number match",
+      "name similarity 0.89 ('Product Storage Tank 201' ~ 'Product Storage Tank 201 Level')",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-006",
+    "canonical_name": "Facility 1 > Unit 100 > Centrifugal Pump 102",
+    "confidence": 0.816,
+    "system_count": 2,
+    "members": [
+      {
+        "system": "APM",
+        "local_id": "Pump_002",
+        "name": "Facility 1 > Unit 100 > Centrifugal Pump 102",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": "102",
+        "criticality": "Medium",
+        "attributes": {
+          "manufacturer": "Sundyne",
+          "monitored_params": [
+            "SuctionPressure",
+            "Flow"
+          ],
+          "raw_asset_class": "CentrifugalPump"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT100.PUMP_102",
+        "name": "Reflux Pump 102 Suction Press",
+        "unit": "100",
+        "asset_class": "Pump",
+        "equipment_number": "102",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT100.PUMP_102.PSUC_02"
+          ],
+          "descriptions": [
+            "Reflux Pump 102 Suction Press"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "equipment_number match",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-007",
+    "canonical_name": "Column Pressure Control",
+    "confidence": 0.859,
+    "system_count": 2,
+    "members": [
+      {
+        "system": "DCS",
+        "local_id": "U100_C101",
+        "name": "Column Pressure Control",
+        "unit": "100",
+        "asset_class": "Column",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "pv_tag": "PI-100-C101",
+          "sp_tag": "PS-100-C101",
+          "op_tag": "PO-100-C101",
+          "loop_type": "Pressure"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT100.COLUMN_101",
+        "name": "Column 101 Differential Pressure",
+        "unit": "100",
+        "asset_class": "Column",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT100.COLUMN_101.PDP_01"
+          ],
+          "descriptions": [
+            "Column 101 Differential Pressure"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "equipment_number match",
+      "name similarity 0.55 ('Column Pressure Control' ~ 'Column 101 Differential Pressure')",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-008",
+    "canonical_name": "Heater Outlet Temp Control",
+    "confidence": 0.807,
+    "system_count": 2,
+    "members": [
+      {
+        "system": "DCS",
+        "local_id": "U100_H101",
+        "name": "Heater Outlet Temp Control",
+        "unit": "100",
+        "asset_class": "FiredHeater",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "pv_tag": "TI-100-H101",
+          "sp_tag": "TS-100-H101",
+          "op_tag": "TO-100-H101",
+          "loop_type": "Temp"
+        }
+      },
+      {
+        "system": "Historian",
+        "local_id": "FAC1.UNIT100.FIRED_HEATER_101",
+        "name": "Fired Heater 101 Fuel Gas Flow",
+        "unit": "100",
+        "asset_class": "FiredHeater",
+        "equipment_number": "101",
+        "criticality": null,
+        "attributes": {
+          "tags": [
+            "FAC1.UNIT100.FIRED_HEATER_101.FUEL_01"
+          ],
+          "descriptions": [
+            "Fired Heater 101 Fuel Gas Flow"
+          ]
+        }
+      }
+    ],
+    "evidence": [
+      "class match",
+      "equipment_number match",
+      "unit match"
+    ]
+  },
+  {
+    "unified_id": "ASSET-009",
+    "canonical_name": "Reflux Drum Level Control",
+    "confidence": null,
+    "system_count": 1,
+    "members": [
+      {
+        "system": "DCS",
+        "local_id": "U100_V201",
+        "name": "Reflux Drum Level Control",
+        "unit": "100",
+        "asset_class": "Drum",
+        "equipment_number": "201",
+        "criticality": null,
+        "attributes": {
+          "pv_tag": "LI-100-V201",
+          "sp_tag": "LS-100-V201",
+          "op_tag": "LO-100-V201",
+          "loop_type": "Level"
+        }
+      }
+    ],
+    "evidence": []
+  }
+]

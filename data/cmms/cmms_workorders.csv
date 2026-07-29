@@ -1,0 +1,5 @@
+wo_id,asset_code,wo_type,status,created,completed,technician,parts_used,notes
+WO-4471,EQ-1042,Corrective,Closed,2026-07-21T06:00:00Z,2026-07-22T06:00:00Z,TECH_JOE,MECH-SEAL-32,Replaced mechanical seal. Alignment checked but shim kit was short; flagged for recheck at next opportunity.
+WO-4502,EQ-2210,Preventive,Deferred,2026-07-10T06:00:00Z,,PLAN_PRIYA,,"Exchanger E-101 bundle cleaning deferred twice due to unit online; fouling suspected, outlet temperature drifting down."
+WO-4530,EQ-8001,Corrective,Open,2026-07-25T12:00:00Z,,TECH_JOE,,Cooling water valve CV-400 reported sticking; not tracking setpoint. Suspect trim fouling. Parts on order.
+WO-4388,EQ-1042,Preventive,Closed,2026-04-24T06:00:00Z,2026-04-25T06:00:00Z,TECH_JOE,,"Routine seal inspection, no issues found."

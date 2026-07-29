@@ -1,0 +1,85 @@
+{
+  "system": "MaintWorks",
+  "equipment": [
+    {
+      "asset_code": "EQ-1042",
+      "description": "Crude Charge Pump A",
+      "functional_location": "FAC1-U100-PUMPS",
+      "criticality_class": "A",
+      "bom": [
+        {
+          "part": "MECH-SEAL-32",
+          "desc": "Mechanical seal cartridge"
+        },
+        {
+          "part": "BRG-6312",
+          "desc": "Thrust bearing"
+        }
+      ],
+      "pm_schedule": [
+        {
+          "pm_id": "PM-SEAL-Q",
+          "task": "Seal inspection",
+          "interval_days": 90
+        }
+      ]
+    },
+    {
+      "asset_code": "EQ-2210",
+      "description": "Crude Preheat Bundle",
+      "functional_location": "FAC1-U100-HX",
+      "criticality_class": "B",
+      "bom": [
+        {
+          "part": "GSKT-14",
+          "desc": "Channel gasket"
+        }
+      ],
+      "pm_schedule": [
+        {
+          "pm_id": "PM-CLEAN-6M",
+          "task": "Bundle cleaning",
+          "interval_days": 180
+        }
+      ]
+    },
+    {
+      "asset_code": "EQ-6001",
+      "description": "H2 Recycle Compressor",
+      "functional_location": "FAC1-U100-ROT",
+      "criticality_class": "A",
+      "bom": [
+        {
+          "part": "LO-FILT-9",
+          "desc": "Lube oil filter"
+        }
+      ],
+      "pm_schedule": [
+        {
+          "pm_id": "PM-LO-M",
+          "task": "Lube oil check",
+          "interval_days": 30
+        }
+      ]
+    },
+    {
+      "asset_code": "EQ-8001",
+      "description": "Utility CW Control Valve",
+      "functional_location": "FAC1-U400-VLV",
+      "criticality_class": "B",
+      "bom": [
+        {
+          "part": "TRIM-KIT-4",
+          "desc": "Valve trim kit"
+        }
+      ],
+      "pm_schedule": [
+        {
+          "pm_id": "PM-VLV-Y",
+          "task": "Valve stroke test",
+          "interval_days": 365
+        }
+      ]
+    }
+  ]
+}

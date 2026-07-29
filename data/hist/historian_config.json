@@ -1,0 +1,114 @@
+{
+  "system": "PHD",
+  "plant": "FAC1",
+  "tags": [
+    {
+      "tag": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01",
+      "description": "Crude Charge Pump 101 Vibration",
+      "eng_unit": "mm/s",
+      "source": "DCS",
+      "min": 0,
+      "max": 20,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.FLOW_01",
+      "description": "Crude Charge Pump 101 Discharge Flow",
+      "eng_unit": "m3/h",
+      "source": "DCS",
+      "min": 0,
+      "max": 500,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.BTMP_01",
+      "description": "Crude Charge Pump 101 Bearing Temp",
+      "eng_unit": "degC",
+      "source": "DCS",
+      "min": 0,
+      "max": 120,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.PSUC_01",
+      "description": "Crude Charge Pump 101 Suction Press",
+      "eng_unit": "barg",
+      "source": "DCS",
+      "min": 0,
+      "max": 10,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.HEAT_EXCHANGER_101.TOUT_01",
+      "description": "Preheat Exchanger 101 Outlet Temp",
+      "eng_unit": "degC",
+      "source": "DCS",
+      "min": 0,
+      "max": 400,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.FIRED_HEATER_101.FUEL_01",
+      "description": "Fired Heater 101 Fuel Gas Flow",
+      "eng_unit": "Nm3/h",
+      "source": "DCS",
+      "min": 0,
+      "max": 3000,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.COLUMN_101.PDP_01",
+      "description": "Column 101 Differential Pressure",
+      "eng_unit": "bar",
+      "source": "DCS",
+      "min": 0,
+      "max": 3,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.PUMP_102.PSUC_02",
+      "description": "Reflux Pump 102 Suction Press",
+      "eng_unit": "barg",
+      "source": "DCS",
+      "min": 0,
+      "max": 10,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT400.CONTROL_VALVE_101.CWFL_01",
+      "description": "Cooling Water Flow (CV-400)",
+      "eng_unit": "m3/h",
+      "source": "DCS",
+      "min": 0,
+      "max": 300,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.GAS_COMPRESSOR_101.LUBE_01",
+      "description": "Recycle Gas Compressor Lube Oil Temp",
+      "eng_unit": "degC",
+      "source": "DCS",
+      "min": 0,
+      "max": 120,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT100.GAS_COMPRESSOR_101.VIB_02",
+      "description": "Recycle Gas Compressor Vibration",
+      "eng_unit": "mm/s",
+      "source": "DCS",
+      "min": 0,
+      "max": 20,
+      "sample_interval_s": 60
+    },
+    {
+      "tag": "FAC1.UNIT200.STORAGE_TANK_101.LVL_01",
+      "description": "Product Storage Tank 201 Level",
+      "eng_unit": "%",
+      "source": "DCS",
+      "min": 0,
+      "max": 100,
+      "sample_interval_s": 60
+    }
+  ]
+}

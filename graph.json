@@ -1,0 +1,2525 @@
+{
+  "nodes": [
+    {
+      "id": "ASSET-001",
+      "label": "Asset",
+      "canonical_name": "Recycle Gas Compressor 101",
+      "confidence": 0.773,
+      "system_ids": {
+        "AM": "C-101",
+        "APM": "Compressor_005",
+        "CMMS": "EQ-6001",
+        "DCS": "U100_K101",
+        "ERP": "ERP-FAC1-CMP-100-101",
+        "Historian": "FAC1.UNIT100.GAS_COMPRESSOR_101"
+      }
+    },
+    {
+      "id": "ASSET-002",
+      "label": "Asset",
+      "canonical_name": "Crude Charge Pump 101",
+      "confidence": 0.778,
+      "system_ids": {
+        "AM": "PMP-100-101",
+        "APM": "Pump_001",
+        "CMMS": "EQ-1042",
+        "DCS": "U100_P101",
+        "ERP": "ERP-FAC1-PMP-100-101",
+        "Historian": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101"
+      }
+    },
+    {
+      "id": "ASSET-003",
+      "label": "Asset",
+      "canonical_name": "Facility 1 > Unit 100 > Heat Exchanger 101",
+      "confidence": 0.865,
+      "system_ids": {
+        "APM": "Exchanger_014",
+        "CMMS": "EQ-2210",
+        "ERP": "ERP-FAC1-HEX-100-101",
+        "Historian": "FAC1.UNIT100.HEAT_EXCHANGER_101"
+      }
+    },
+    {
+      "id": "ASSET-004",
+      "label": "Asset",
+      "canonical_name": "Boiler Feed Flow Control Valve",
+      "confidence": 0.738,
+      "system_ids": {
+        "CMMS": "EQ-8001",
+        "DCS": "U400_V101",
+        "ERP": "ERP-FAC1-VLV-400-101",
+        "Historian": "FAC1.UNIT400.CONTROL_VALVE_101"
+      }
+    },
+    {
+      "id": "ASSET-005",
+      "label": "Asset",
+      "canonical_name": "Product Storage Tank 201",
+      "confidence": 0.928,
+      "system_ids": {
+        "AM": "TNK-200-101",
+        "Historian": "FAC1.UNIT200.STORAGE_TANK_101"
+      }
+    },
+    {
+      "id": "ASSET-006",
+      "label": "Asset",
+      "canonical_name": "Facility 1 > Unit 100 > Centrifugal Pump 102",
+      "confidence": 0.816,
+      "system_ids": {
+        "APM": "Pump_002",
+        "Historian": "FAC1.UNIT100.PUMP_102"
+      }
+    },
+    {
+      "id": "ASSET-007",
+      "label": "Asset",
+      "canonical_name": "Column Pressure Control",
+      "confidence": 0.859,
+      "system_ids": {
+        "DCS": "U100_C101",
+        "Historian": "FAC1.UNIT100.COLUMN_101"
+      }
+    },
+    {
+      "id": "ASSET-008",
+      "label": "Asset",
+      "canonical_name": "Heater Outlet Temp Control",
+      "confidence": 0.807,
+      "system_ids": {
+        "DCS": "U100_H101",
+        "Historian": "FAC1.UNIT100.FIRED_HEATER_101"
+      }
+    },
+    {
+      "id": "ASSET-009",
+      "label": "Asset",
+      "canonical_name": "Reflux Drum Level Control",
+      "confidence": null,
+      "system_ids": {
+        "DCS": "U100_V201"
+      }
+    },
+    {
+      "id": "AME-000004",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-26T12:00:00Z",
+      "alarm_point": "C-101.VIB",
+      "alarm_type": "H",
+      "priority": "P1",
+      "state": "ACTIVE",
+      "value": "6.8",
+      "operator": "OP_MARIA"
+    },
+    {
+      "id": "AME-000005",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-26T15:00:00Z",
+      "alarm_point": "C-101.VIB",
+      "alarm_type": "HH",
+      "priority": "P1",
+      "state": "ACTIVE",
+      "value": "9.2",
+      "operator": "OP_MARIA"
+    },
+    {
+      "id": "AME-000006",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-26T15:05:00Z",
+      "alarm_point": "C-101.VIB",
+      "alarm_type": "HH",
+      "priority": "P1",
+      "state": "ACK",
+      "value": "9.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000007",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:00:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000008",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:04:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000009",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:09:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000010",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:17:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000011",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:25:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000012",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:32:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000013",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:36:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000014",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:42:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000015",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:49:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000016",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:53:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000017",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T06:56:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000018",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:02:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000019",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:06:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000020",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:09:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000021",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:17:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000022",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:20:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000023",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:29:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000024",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:35:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000025",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:39:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000026",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:45:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000027",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:50:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000028",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T07:59:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000029",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:06:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000030",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:12:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000031",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:18:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000032",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:25:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000033",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:28:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000034",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:31:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000035",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:36:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000036",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:39:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000037",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:47:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000038",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T08:54:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000039",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:03:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000040",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:12:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000041",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:18:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000042",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:23:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000043",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:30:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000044",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:37:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000045",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:43:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000046",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:47:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000047",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:50:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000048",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T09:56:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000049",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:01:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000050",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:05:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000051",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:08:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000052",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:11:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000053",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:14:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000054",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:18:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000055",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:21:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000056",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:30:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000057",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:37:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000058",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:44:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000059",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:48:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000060",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T10:56:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000061",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:05:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000062",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:11:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000063",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:16:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000064",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:20:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000065",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:28:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000066",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:33:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000067",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:37:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000068",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:46:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000069",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:51:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000070",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T11:56:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000071",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:04:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000072",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:12:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000073",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:18:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000074",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:27:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000075",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:31:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000076",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:36:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000077",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:42:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000078",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:50:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000079",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T12:53:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000080",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:01:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000081",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:04:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000082",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:11:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000083",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:15:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000084",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:19:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000085",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:26:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000086",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:35:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000087",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:42:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000088",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:46:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000089",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:50:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000090",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T13:55:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000091",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:03:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000092",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:09:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000093",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:18:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000094",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:27:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000095",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:31:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000096",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:39:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000097",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:46:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000098",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:49:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000099",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T14:56:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000100",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:01:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000101",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:08:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000102",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:14:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000103",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:21:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000104",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:28:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000105",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:33:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000106",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:41:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000107",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:46:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000108",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T15:55:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000109",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:00:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000110",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:07:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000111",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:12:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000112",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:17:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000113",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:25:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000114",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:32:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000115",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:36:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000116",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:44:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000117",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:50:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000118",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:55:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000119",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T16:58:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000120",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T17:02:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000121",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T17:10:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000122",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T17:17:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000123",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T17:21:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000124",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T17:25:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000125",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T17:33:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "ACTIVE",
+      "value": "78.6",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000126",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-27T17:39:00Z",
+      "alarm_point": "TNK-200-101.LVL",
+      "alarm_type": "H",
+      "priority": "P3",
+      "state": "RTN",
+      "value": "78.3",
+      "operator": "OP_LEE"
+    },
+    {
+      "id": "AME-000001",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-28T02:00:00Z",
+      "alarm_point": "PMP-100-101.VIB",
+      "alarm_type": "H",
+      "priority": "P1",
+      "state": "ACTIVE",
+      "value": "8.7",
+      "operator": "OP_MARIA"
+    },
+    {
+      "id": "AME-000002",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-28T02:40:00Z",
+      "alarm_point": "PMP-100-101.VIB",
+      "alarm_type": "HH",
+      "priority": "P1",
+      "state": "ACTIVE",
+      "value": "11.4",
+      "operator": "OP_MARIA"
+    },
+    {
+      "id": "AME-000003",
+      "label": "AlarmEvent",
+      "timestamp": "2026-07-28T02:44:00Z",
+      "alarm_point": "PMP-100-101.VIB",
+      "alarm_type": "HH",
+      "priority": "P1",
+      "state": "ACK",
+      "value": "11.6",
+      "operator": "OP_MARIA"
+    },
+    {
+      "id": "WO-4471",
+      "label": "WorkOrder",
+      "wo_type": "Corrective",
+      "status": "Closed",
+      "created": "2026-07-21T06:00:00Z",
+      "completed": "2026-07-22T06:00:00Z",
+      "technician": "TECH_JOE",
+      "parts_used": "MECH-SEAL-32",
+      "notes": "Replaced mechanical seal. Alignment checked but shim kit was short; flagged for recheck at next opportunity."
+    },
+    {
+      "id": "WO-4502",
+      "label": "WorkOrder",
+      "wo_type": "Preventive",
+      "status": "Deferred",
+      "created": "2026-07-10T06:00:00Z",
+      "completed": null,
+      "technician": "PLAN_PRIYA",
+      "parts_used": null,
+      "notes": "Exchanger E-101 bundle cleaning deferred twice due to unit online; fouling suspected, outlet temperature drifting down."
+    },
+    {
+      "id": "WO-4530",
+      "label": "WorkOrder",
+      "wo_type": "Corrective",
+      "status": "Open",
+      "created": "2026-07-25T12:00:00Z",
+      "completed": null,
+      "technician": "TECH_JOE",
+      "parts_used": null,
+      "notes": "Cooling water valve CV-400 reported sticking; not tracking setpoint. Suspect trim fouling. Parts on order."
+    },
+    {
+      "id": "WO-4388",
+      "label": "WorkOrder",
+      "wo_type": "Preventive",
+      "status": "Closed",
+      "created": "2026-04-24T06:00:00Z",
+      "completed": "2026-04-25T06:00:00Z",
+      "technician": "TECH_JOE",
+      "parts_used": null,
+      "notes": "Routine seal inspection, no issues found."
+    },
+    {
+      "id": "DCS-A-0450",
+      "label": "OperatorAction",
+      "timestamp": "2026-07-27T22:00:00Z",
+      "loop_id": "U100_P101",
+      "action_type": "SP_CHANGE",
+      "old_value": "320.0",
+      "new_value": "358.4",
+      "operator": "OP_SAM",
+      "shift": "NightB"
+    },
+    {
+      "id": "DCS-A-0431",
+      "label": "OperatorAction",
+      "timestamp": "2026-07-16T06:00:00Z",
+      "loop_id": "U100_P101",
+      "action_type": "SP_CHANGE",
+      "old_value": "315.0",
+      "new_value": "320.0",
+      "operator": "OP_SAM",
+      "shift": "DayA"
+    },
+    {
+      "id": "DCS-A-0470",
+      "label": "OperatorAction",
+      "timestamp": "2026-07-25T08:00:00Z",
+      "loop_id": "U400_V101",
+      "action_type": "SP_CHANGE",
+      "old_value": "140.0",
+      "new_value": "155.0",
+      "operator": "OP_LEE",
+      "shift": "DayA"
+    },
+    {
+      "id": "APM-E-0007",
+      "label": "HealthEvent",
+      "timestamp": "2026-07-28T00:00:00Z",
+      "event_type": "PredictedFailure",
+      "symptom": "bearing_wear",
+      "confidence": "0.72",
+      "recommendation": "Inspect bearing/seal within 72h"
+    },
+    {
+      "id": "APM-E-0008",
+      "label": "HealthEvent",
+      "timestamp": "2026-07-26T14:00:00Z",
+      "event_type": "AnomalyDetected",
+      "symptom": "vib_trend_rising",
+      "confidence": "0.68",
+      "recommendation": "Investigate vibration; check lube oil cooling"
+    },
+    {
+      "id": "APM-E-0009",
+      "label": "HealthEvent",
+      "timestamp": "2026-07-13T06:00:00Z",
+      "event_type": "DegradationTrend",
+      "symptom": "fouling_trend",
+      "confidence": "0.8",
+      "recommendation": "Schedule bundle cleaning"
+    },
+    {
+      "id": "POST-9001",
+      "label": "CostPosting",
+      "posting_date": "2026-07-23T06:00:00Z",
+      "amount_usd": "4200",
+      "type": "MaintenanceLabor+Parts",
+      "linked_wo": "WO-4471"
+    },
+    {
+      "id": "POST-9002",
+      "label": "CostPosting",
+      "posting_date": "2026-07-26T06:00:00Z",
+      "amount_usd": "850",
+      "type": "MaintenanceLabor",
+      "linked_wo": "WO-4530"
+    },
+    {
+      "id": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01",
+      "label": "HistorianTag",
+      "description": "Crude Charge Pump 101 Vibration",
+      "eng_unit": "mm/s",
+      "min": 0,
+      "max": 20
+    },
+    {
+      "id": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.FLOW_01",
+      "label": "HistorianTag",
+      "description": "Crude Charge Pump 101 Discharge Flow",
+      "eng_unit": "m3/h",
+      "min": 0,
+      "max": 500
+    },
+    {
+      "id": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.BTMP_01",
+      "label": "HistorianTag",
+      "description": "Crude Charge Pump 101 Bearing Temp",
+      "eng_unit": "degC",
+      "min": 0,
+      "max": 120
+    },
+    {
+      "id": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.PSUC_01",
+      "label": "HistorianTag",
+      "description": "Crude Charge Pump 101 Suction Press",
+      "eng_unit": "barg",
+      "min": 0,
+      "max": 10
+    },
+    {
+      "id": "FAC1.UNIT100.HEAT_EXCHANGER_101.TOUT_01",
+      "label": "HistorianTag",
+      "description": "Preheat Exchanger 101 Outlet Temp",
+      "eng_unit": "degC",
+      "min": 0,
+      "max": 400
+    },
+    {
+      "id": "FAC1.UNIT100.FIRED_HEATER_101.FUEL_01",
+      "label": "HistorianTag",
+      "description": "Fired Heater 101 Fuel Gas Flow",
+      "eng_unit": "Nm3/h",
+      "min": 0,
+      "max": 3000
+    },
+    {
+      "id": "FAC1.UNIT100.COLUMN_101.PDP_01",
+      "label": "HistorianTag",
+      "description": "Column 101 Differential Pressure",
+      "eng_unit": "bar",
+      "min": 0,
+      "max": 3
+    },
+    {
+      "id": "FAC1.UNIT100.PUMP_102.PSUC_02",
+      "label": "HistorianTag",
+      "description": "Reflux Pump 102 Suction Press",
+      "eng_unit": "barg",
+      "min": 0,
+      "max": 10
+    },
+    {
+      "id": "FAC1.UNIT400.CONTROL_VALVE_101.CWFL_01",
+      "label": "HistorianTag",
+      "description": "Cooling Water Flow (CV-400)",
+      "eng_unit": "m3/h",
+      "min": 0,
+      "max": 300
+    },
+    {
+      "id": "FAC1.UNIT100.GAS_COMPRESSOR_101.LUBE_01",
+      "label": "HistorianTag",
+      "description": "Recycle Gas Compressor Lube Oil Temp",
+      "eng_unit": "degC",
+      "min": 0,
+      "max": 120
+    },
+    {
+      "id": "FAC1.UNIT100.GAS_COMPRESSOR_101.VIB_02",
+      "label": "HistorianTag",
+      "description": "Recycle Gas Compressor Vibration",
+      "eng_unit": "mm/s",
+      "min": 0,
+      "max": 20
+    },
+    {
+      "id": "FAC1.UNIT200.STORAGE_TANK_101.LVL_01",
+      "label": "HistorianTag",
+      "description": "Product Storage Tank 201 Level",
+      "eng_unit": "%",
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "edges": [
+    {
+      "source": "ASSET-001",
+      "target": "AME-000004",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-001",
+      "target": "AME-000005",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-001",
+      "target": "AME-000006",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000007",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000008",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000009",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000010",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000011",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000012",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000013",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000014",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000015",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000016",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000017",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000018",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000019",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000020",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000021",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000022",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000023",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000024",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000025",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000026",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000027",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000028",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000029",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000030",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000031",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000032",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000033",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000034",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000035",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000036",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000037",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000038",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000039",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000040",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000041",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000042",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000043",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000044",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000045",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000046",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000047",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000048",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000049",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000050",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000051",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000052",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000053",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000054",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000055",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000056",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000057",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000058",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000059",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000060",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000061",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000062",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000063",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000064",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000065",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000066",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000067",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000068",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000069",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000070",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000071",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000072",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000073",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000074",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000075",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000076",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000077",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000078",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000079",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000080",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000081",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000082",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000083",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000084",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000085",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000086",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000087",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000088",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000089",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000090",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000091",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000092",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000093",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000094",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000095",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000096",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000097",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000098",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000099",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000100",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000101",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000102",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000103",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000104",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000105",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000106",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000107",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000108",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000109",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000110",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000111",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000112",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000113",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000114",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000115",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000116",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000117",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000118",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000119",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000120",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000121",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000122",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000123",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000124",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000125",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "AME-000126",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "AME-000001",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "AME-000002",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "AME-000003",
+      "type": "HAS_ALARM"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "WO-4471",
+      "type": "HAS_WORK_ORDER"
+    },
+    {
+      "source": "ASSET-003",
+      "target": "WO-4502",
+      "type": "HAS_WORK_ORDER"
+    },
+    {
+      "source": "ASSET-004",
+      "target": "WO-4530",
+      "type": "HAS_WORK_ORDER"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "WO-4388",
+      "type": "HAS_WORK_ORDER"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "DCS-A-0450",
+      "type": "HAS_SETPOINT_CHANGE"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "DCS-A-0431",
+      "type": "HAS_SETPOINT_CHANGE"
+    },
+    {
+      "source": "ASSET-004",
+      "target": "DCS-A-0470",
+      "type": "HAS_SETPOINT_CHANGE"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "APM-E-0007",
+      "type": "HAS_HEALTH_EVENT"
+    },
+    {
+      "source": "ASSET-001",
+      "target": "APM-E-0008",
+      "type": "HAS_HEALTH_EVENT"
+    },
+    {
+      "source": "ASSET-003",
+      "target": "APM-E-0009",
+      "type": "HAS_HEALTH_EVENT"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "POST-9001",
+      "type": "HAS_COST_POSTING"
+    },
+    {
+      "source": "POST-9001",
+      "target": "WO-4471",
+      "type": "REFERENCES_WORK_ORDER"
+    },
+    {
+      "source": "ASSET-004",
+      "target": "POST-9002",
+      "type": "HAS_COST_POSTING"
+    },
+    {
+      "source": "POST-9002",
+      "target": "WO-4530",
+      "type": "REFERENCES_WORK_ORDER"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.FLOW_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.BTMP_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.PSUC_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-003",
+      "target": "FAC1.UNIT100.HEAT_EXCHANGER_101.TOUT_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-008",
+      "target": "FAC1.UNIT100.FIRED_HEATER_101.FUEL_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-007",
+      "target": "FAC1.UNIT100.COLUMN_101.PDP_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-006",
+      "target": "FAC1.UNIT100.PUMP_102.PSUC_02",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-004",
+      "target": "FAC1.UNIT400.CONTROL_VALVE_101.CWFL_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-001",
+      "target": "FAC1.UNIT100.GAS_COMPRESSOR_101.LUBE_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-001",
+      "target": "FAC1.UNIT100.GAS_COMPRESSOR_101.VIB_02",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-005",
+      "target": "FAC1.UNIT200.STORAGE_TANK_101.LVL_01",
+      "type": "HAS_HISTORIAN_TAG"
+    },
+    {
+      "source": "ASSET-002",
+      "target": "ASSET-003",
+      "type": "FEEDS",
+      "note": "P-101 pumps crude feed into preheat exchanger E-101",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-003",
+      "target": "ASSET-008",
+      "type": "FEEDS",
+      "note": "E-101 preheated crude flows to fired heater H-101",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-008",
+      "target": "ASSET-007",
+      "type": "FEEDS",
+      "note": "Heated crude enters distillation column C-101",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-007",
+      "target": "ASSET-009",
+      "type": "FEEDS",
+      "note": "Naphtha overhead (via condenser E-301, not in this dataset) collects in reflux drum V-201",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-009",
+      "target": "ASSET-006",
+      "type": "FEEDS",
+      "note": "Reflux drum V-201 feeds Reflux Pump P-102",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-006",
+      "target": "ASSET-007",
+      "type": "FEEDS",
+      "note": "P-102 returns reflux back to column C-101",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-004",
+      "target": "ASSET-001",
+      "type": "COOLS",
+      "note": "CV-400 supplies cooling water to K-101's lube-oil cooler",
+      "doc_source": "SCENARIO.md Sec 5b"
+    },
+    {
+      "source": "ASSET-004",
+      "target": "ASSET-008",
+      "type": "SUPPLIES_UTILITY",
+      "note": "CV-400 supplies BFW/steam & cooling water utilities to H-101",
+      "doc_source": "SCENARIO.md Sec 5b"
+    }
+  ]
+}
