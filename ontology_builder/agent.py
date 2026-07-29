@@ -828,19 +828,23 @@ _AGENT_SYSTEM_PROMPT = (
     "follow-up references ('it', 'that pump', 'the work order you mentioned') to the right asset "
     "or record -- but treat earlier answers as conversational context only, NOT as evidence: "
     "re-verify any fact you rely on with the tools before citing it.\n"
-    "7. Structure your final answer in Markdown with EXACTLY three top-level sections, in this "
-    "order, using these exact headings and no others:\n"
-    "   '## Headline' -- ONE short, punchy phrase (max 12 words, no trailing period) stating the "
-    "likely cause, e.g. 'Setpoint hike plus seal misalignment driving vibration'. This is shown as "
-    "a large bold title in the UI, so it must be brief -- not a full sentence.\n"
-    "   '## Root Cause' -- a concise 3-5 sentence analysis (not 4-8) ranking the most likely cause "
-    "when there are multiple contributing factors. Be economical: cite the key evidence, don't "
-    "restate every tool result.\n"
-    "   '## Recommended Actions' -- 2-4 short Markdown bullet points, one line each, grounded "
-    "only in the evidence you found.\n"
-    "8. IMPORTANT: You have a limited output budget. ALWAYS finish the '## Recommended Actions' "
-    "section -- it is required. If you are running long, shorten the '## Root Cause' section "
-    "rather than omitting or truncating '## Recommended Actions'."
+    "7. Structure your final answer in Markdown using these exact headings and no others, in "
+    "this order. Match the sections to what was actually ASKED:\n"
+    "   '## Headline' -- ALWAYS required. ONE short, punchy phrase (max 12 words, no trailing "
+    "period), e.g. 'Setpoint hike plus seal misalignment driving vibration'. This is shown as a "
+    "large bold title in the UI, so it must be brief -- not a full sentence.\n"
+    "   '## Root Cause' (for diagnostic questions -- 'why is X happening', 'what caused Y', "
+    "'is A the same problem as B') OR '## Summary' (for informational/lookup questions -- 'show "
+    "me everything about X', 'what's alarming right now', 'what maintenance happened last week') "
+    "-- pick whichever actually fits; use exactly one of the two. A concise 3-5 sentence "
+    "analysis. Be economical: cite the key evidence, don't restate every tool result.\n"
+    "   '## Recommended Actions' -- 2-4 short Markdown bullet points, grounded only in the "
+    "evidence you found. Include this ONLY when the question is diagnostic, or when the evidence "
+    "genuinely calls for operator action. OMIT this section entirely for pure lookup/status "
+    "questions -- do not invent advice just to fill it in.\n"
+    "8. IMPORTANT: You have a limited output budget. If you are running long, shorten the "
+    "analysis section rather than truncating a section mid-sentence. When "
+    "'## Recommended Actions' applies, always finish it."
 )
 
 
@@ -1253,7 +1257,12 @@ def _primary_asset_id_from_trace(trace: list[dict[str, Any]]) -> Optional[str]:
 
 _HEADLINE_HEADING_RE = re.compile(r"^#{1,3}\s*Headline\s*$", re.IGNORECASE | re.MULTILINE)
 _RECOMMENDED_ACTIONS_HEADING_RE = re.compile(r"^#{1,3}\s*Recommended Actions?\s*$", re.IGNORECASE | re.MULTILINE)
-_ROOT_CAUSE_HEADING_RE = re.compile(r"^#{1,3}\s*Root Cause\s*$", re.IGNORECASE | re.MULTILINE)
+# The body heading is "Root Cause" for diagnostic questions and "Summary" for
+# informational ones (see rule 7) -- accept either, plus "Analysis" as a
+# tolerated near-miss, since the format is requested but never enforced.
+_ROOT_CAUSE_HEADING_RE = re.compile(
+    r"^#{1,3}\s*(?:Root Cause|Summary|Analysis)\s*$", re.IGNORECASE | re.MULTILINE
+)
 
 
 def _split_agent_response(content: str) -> tuple[Optional[str], str, Optional[str]]:

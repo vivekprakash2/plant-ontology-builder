@@ -985,7 +985,7 @@ textarea:focus-visible {
 .graph-legend {
   position: absolute;
   left: 3.2rem;
-  right: 0.8rem;
+  max-width: calc(100% - 4rem);
   bottom: 0.8rem;
   display: flex;
   flex-wrap: wrap;
@@ -1322,6 +1322,26 @@ textarea:focus-visible {
   opacity: 0.18;
 }
 
+/* Records the reasoning touched but the answer doesn't cite by name --
+   visible for completeness, quiet by design so the red cited path pops. */
+.node.context {
+  opacity: 0.45;
+}
+
+.node.context .node-label {
+  opacity: 0.8;
+}
+
+/* Bulk record groups (e.g. 120 alarm events) render as unlabeled dots;
+   hovering any one of them still shows its caption + inspector. */
+.node.label-hidden .node-label {
+  display: none;
+}
+
+.node.label-hidden:hover .node-label {
+  display: block;
+}
+
 .node.highlighted .node-circle {
   stroke: var(--accent-red);
   stroke-width: 3px;
@@ -1333,7 +1353,11 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
-.node.selected .node-circle {
+/* .anchor = the entity an answer resolved to (set automatically when a walk
+   settles). .selected = pinned by a click. Same dashed ring, different
+   meaning -- both can be true at once. */
+.node.selected .node-circle,
+.node.anchor .node-circle {
   stroke: var(--accent-black);
   stroke-width: 3px;
   stroke-dasharray: 3 2;
@@ -1409,19 +1433,55 @@ textarea:focus-visible {
   bottom: 8.2rem;
   width: 230px;
   max-width: calc(100% - 1.6rem);
-  max-height: 220px;
+  max-height: 200px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
   padding: 0.6rem 0.85rem;
-  overflow-y: auto;
+  overflow: hidden; /* transient hover peek: never scrolls, just clips */
   font-size: 0.85rem;
   z-index: 5;
 }
 
 .inspector.show {
   display: block;
+}
+
+/* Pinned (clicked) -- taller, and the CONTENT scrolls (not the panel) so the
+   ✕ stays anchored. A hover peek stays short and unscrollable. */
+.inspector.pinned {
+  max-height: min(420px, calc(100% - 10.5rem));
+  display: flex;
+  flex-direction: column;
+  border-color: var(--accent-red);
+  padding-right: 1.5rem;
+}
+
+.inspector.pinned .inspector-body {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 0.2rem;
+}
+
+.inspector-close {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.35rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.inspector-close:hover {
+  color: var(--accent-red);
+  background: var(--chip-active-bg);
 }
 
 .inspector-title {

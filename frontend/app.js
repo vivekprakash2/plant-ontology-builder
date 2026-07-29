@@ -96,6 +96,30 @@ function applyWalkUiState() {
   }
 }
 
+// The legend is a contextual key, not a fixed table of contents: it only
+// lists record types actually present in the current scoped subgraph (plus
+// the two color-language rows), and it's hidden completely on the Ontology
+// Overview, where every node already shows its type as a caption.
+function updateLegend() {
+  const present = new Set();
+  graphState.revealedIds.forEach((id) => {
+    const node = graphState.nodesById.get(id);
+    if (node) present.add(node.label);
+  });
+  let shown = 0;
+  graphLegend.querySelectorAll(".legend-item").forEach((item) => {
+    if (item.dataset.always) {
+      item.style.display = "inline-flex";
+      return;
+    }
+    const labels = (item.dataset.labels || "").split(",");
+    const visible = labels.some((l) => present.has(l));
+    item.style.display = visible ? "inline-flex" : "none";
+    if (visible) shown++;
+  });
+  return shown;
+}
+
 // Shows/hides the floating chrome (empty hint, trace panel, legend, zoom
 // stack) to match the active tab + whether any answer subgraph is revealed.
 function updateWalkChrome() {
@@ -103,30 +127,41 @@ function updateWalkChrome() {
   const walkEmpty = graphState.revealedIds.size === 0;
   walkEmptyHint.style.display = walkActive && walkEmpty ? "flex" : "none";
   reasoningTrace.style.display = walkActive && !walkEmpty ? "flex" : "none";
-  graphLegend.style.display = walkActive && walkEmpty ? "none" : "flex";
   zoomStack.style.display = walkActive && walkEmpty ? "none" : "flex";
+  // Legend: walk tab only, and only once there's a subgraph to decode.
+  if (!walkActive || walkEmpty) {
+    graphLegend.style.display = "none";
+    return;
+  }
+  updateLegend();
+  graphLegend.style.display = "flex";
 }
 
 function showOverviewTab() {
+  const wasWalk = viewWalk.classList.contains("active");
   tabOverview.classList.add("active");
   tabWalk.classList.remove("active");
   viewOverview.classList.add("active");
   viewWalk.classList.remove("active");
   explorerHint.textContent = "Type-level schema -- one node per record type";
+  // A node pinned on the walk tab must not leak its panel onto the schema view.
+  if (wasWalk) unpinInspector();
   updateWalkChrome();
 }
 function showWalkTab() {
+  const wasOverview = viewOverview.classList.contains("active");
   tabOverview.classList.remove("active");
   tabWalk.classList.add("active");
   viewOverview.classList.remove("active");
   viewWalk.classList.add("active");
+  if (wasOverview) hideInspector();
   applyWalkUiState();
   updateWalkChrome();
 }
 tabOverview.addEventListener("click", showOverviewTab);
 tabWalk.addEventListener("click", showWalkTab);
 
-// --- Dark mode (default) with a manual toggle, persisted in localStorage ---
+// --- Light mode (default) with a manual toggle, persisted in localStorage ---
 // The actual theme attribute is already set by an inline script in
 // index.html's <head> (before first paint, to avoid a flash of the wrong
 // theme) -- this just keeps the toggle button's icon/label in sync and
@@ -143,7 +178,7 @@ themeToggle.addEventListener("click", () => {
   applyTheme(current === "dark" ? "light" : "dark");
 });
 
-applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
+applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
 
 const CONFIDENCE_SCORE = {
   high: 0.93,
@@ -751,6 +786,9 @@ async function submitQuestion(question) {
         if (event.type === "final") {
           renderAssistantBubble(pendingTurn, event);
           recordHistoryTurn(question, event);
+          lastAnswerText = [event.headline, event.answer, event.recommendation]
+            .filter(Boolean)
+            .join(" ");
           // Keep this answer's panel + precomputed walk steps around so the
           // reasoning-trace panel's play/step controls can replay them later,
           // regardless of which path (live SSE or post-hoc) drove them the
@@ -989,45 +1027,93 @@ function resetWalkScope() {
 }
 
 function clearHighlight() {
-  graphState.nodes.forEach((node) => node.el.classList.remove("highlighted", "dimmed"));
+  graphState.nodes.forEach((node) => node.el.classList.remove("highlighted", "dimmed", "context"));
   graphState.edges.forEach((edge) => edge.el.classList.remove("highlighted", "dimmed"));
 }
 
-function selectNode(nodeId) {
+// --- Inspector: transient on hover, pinned on click ------------------------
+// Two distinct modes, because they want different behavior:
+//   HOVER  -> a peek. Moving the pointer away must always dismiss it (that
+//             includes leaving the whole viewport, and switching tabs), so
+//             the panel never sits there stale over the canvas.
+//   CLICK  -> pinned. Stays put with a ✕ to dismiss, and grows taller +
+//             scrolls internally so a node with many properties/connections
+//             is actually readable instead of clipped.
+function pinInspector(nodeId) {
   const node = graphState.nodesById.get(nodeId);
   if (!node) return;
   graphState.selectedId = nodeId;
-  renderInspector(node);
+  renderInspector(node, { pinned: true });
   const priorSelected = plantGraph.querySelector(".node.selected");
   if (priorSelected) priorSelected.classList.remove("selected");
   node.el.classList.add("selected");
 }
 
-// Restores the inspector to whatever the "pinned" (clicked) node is, or
-// hides it entirely if nothing is pinned -- used when the mouse leaves a
-// node that was only being previewed on hover, not clicked. The inspector
-// is a hover popup: it should only be on screen while there's something to
-// show, never sitting empty with a placeholder hint.
-function resetInspectorToDefault() {
-  if (graphState.selectedId && graphState.nodesById.has(graphState.selectedId)) {
-    renderInspector(graphState.nodesById.get(graphState.selectedId));
-    return;
-  }
-  inspector.classList.remove("show");
+// Kept as the old name because panToNode({select:true}) and the inspector's
+// own connection list both call it.
+function selectNode(nodeId) {
+  pinInspector(nodeId);
+}
+
+function hideInspector() {
+  inspector.classList.remove("show", "pinned");
   inspector.innerHTML = "";
 }
 
-function renderInspector(node) {
+function unpinInspector() {
+  graphState.selectedId = null;
+  const priorSelected = plantGraph.querySelector(".node.selected");
+  if (priorSelected) priorSelected.classList.remove("selected");
+  hideInspector();
+}
+
+// Pointer left a node (or the viewport): fall back to the pinned node if
+// there is one, otherwise dismiss entirely.
+function hideInspectorPreview() {
+  if (graphState.selectedId && graphState.nodesById.has(graphState.selectedId)) {
+    renderInspector(graphState.nodesById.get(graphState.selectedId), { pinned: true });
+    return;
+  }
+  hideInspector();
+}
+
+// Safety net: fast pointer moves and nodes that get re-laid-out mid-hover can
+// swallow a node's own mouseleave, which is what left the panel stranded.
+// Leaving the viewport always clears an unpinned preview.
+graphViewport.addEventListener("mouseleave", () => {
+  if (!graphState.selectedId) hideInspector();
+});
+
+function renderInspector(node, { pinned = false } = {}) {
   inspector.classList.add("show");
+  inspector.classList.toggle("pinned", pinned);
   inspector.innerHTML = "";
+  if (pinned) {
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "inspector-close";
+    close.setAttribute("aria-label", "Close inspector");
+    close.textContent = "✕";
+    close.addEventListener("click", (e) => {
+      e.stopPropagation();
+      unpinInspector();
+    });
+    inspector.appendChild(close);
+  }
+  // All content lives in a scrollable body so the ✕ stays put when a pinned
+  // panel's content overflows.
+  const body = document.createElement("div");
+  body.className = "inspector-body";
+  inspector.appendChild(body);
+
   const title = document.createElement("p");
   title.className = "inspector-title";
   title.textContent = nodeLabelText(node);
   const typeP = document.createElement("p");
   typeP.className = "muted";
   typeP.textContent = `${node.label} · ${node.id}`;
-  inspector.appendChild(title);
-  inspector.appendChild(typeP);
+  body.appendChild(title);
+  body.appendChild(typeP);
 
   const table = document.createElement("dl");
   table.className = "inspector-fields";
@@ -1041,13 +1127,13 @@ function renderInspector(node) {
     table.appendChild(dt);
     table.appendChild(dd);
   });
-  inspector.appendChild(table);
+  body.appendChild(table);
 
   if (node.label === "Asset" && node.props.system_ids) {
     const aliasTitle = document.createElement("p");
     aliasTitle.className = "inspector-subtitle";
     aliasTitle.textContent = "Per-system aliases";
-    inspector.appendChild(aliasTitle);
+    body.appendChild(aliasTitle);
     const list = document.createElement("ul");
     list.className = "inspector-alias-list";
     Object.entries(node.props.system_ids).forEach(([system, localId]) => {
@@ -1055,7 +1141,7 @@ function renderInspector(node) {
       li.textContent = `${system}: ${localId}`;
       list.appendChild(li);
     });
-    inspector.appendChild(list);
+    body.appendChild(list);
   }
 
   const neighbors = graphState.edgesByNode.get(node.id) || [];
@@ -1063,7 +1149,7 @@ function renderInspector(node) {
     const neighborsTitle = document.createElement("p");
     neighborsTitle.className = "inspector-subtitle";
     neighborsTitle.textContent = `Connections (${neighbors.length})`;
-    inspector.appendChild(neighborsTitle);
+    body.appendChild(neighborsTitle);
     const list = document.createElement("ul");
     list.className = "inspector-alias-list";
     neighbors.slice(0, 25).forEach(({ other, edge }) => {
@@ -1072,7 +1158,7 @@ function renderInspector(node) {
       li.addEventListener("click", () => panToNode(other.id, { select: true }));
       list.appendChild(li);
     });
-    inspector.appendChild(list);
+    body.appendChild(list);
   }
 }
 
@@ -1171,41 +1257,215 @@ function orientSubgraphHorizontally(nodesToMove, layoutW, layoutH, options) {
   });
 }
 
-function layoutScopedSubgraph(nodeIds) {
-  const idSet = new Set(nodeIds);
-  const subNodes = graphState.nodes.filter((n) => idSet.has(n.id));
-  if (subNodes.length < 2) return;
-  const idxById = new Map(subNodes.map((n, i) => [n.id, i]));
-  const subEdges = graphState.edges
-    .filter((e) => idSet.has(e.source) && idSet.has(e.target))
-    .map((e) => ({ ...e, sourceIdx: idxById.get(e.source), targetIdx: idxById.get(e.target) }));
+// ---------------------------------------------------------------------------
+// Deterministic scoped layout -- replaces the old force layout for the
+// settled answer view. A force simulation on a hub-and-spoke subgraph just
+// splays the leaves at random angles/distances (different every run), which
+// read as noise. Instead:
+//   - Asset nodes sit on a left-to-right PROCESS BACKBONE, ordered by their
+//     revealed FEEDS/COOLS/SUPPLIES_UTILITY chain depth (E-101 -> H-101 ->
+//     Column reads like the actual process line).
+//   - Each asset's evidence records fan out around it in sorted arcs
+//     (grouped by record type, stable order), on concentric rings when
+//     there are too many for one ring -- an alarm flood becomes a tidy
+//     radial burst instead of a hairball.
+//   - Record types with more than LEAF_LABEL_LIMIT instances hide their
+//     labels (hover still shows one) -- 120 alarm dots don't need 120
+//     overlapping "AME-000xxx" captions.
+// Same input -> same picture, every run.
+// ---------------------------------------------------------------------------
+const LEAF_BASE_RADIUS = 95;
+const LEAF_RING_GAP = 58;
+const LEAF_LABEL_LIMIT = 12;
+const BACKBONE_COL_SPACING = 330;
 
-  const viewportW = graphViewport.clientWidth || 760;
-  const viewportH = graphViewport.clientHeight || 420;
-  const layoutW = Math.max(viewportW * 0.85, 360);
-  const layoutH = Math.max(viewportH * 0.85, 280);
-  computeForceLayout(subNodes, subEdges, layoutW, layoutH);
-  orientSubgraphHorizontally(subNodes, layoutW, layoutH);
+function assignScopedLayout(nodeIds) {
+  const idSet = nodeIds instanceof Set ? nodeIds : new Set(nodeIds);
+  const revealedAssets = graphState.nodes.filter((n) => idSet.has(n.id) && n.label === "Asset");
+  if (revealedAssets.length === 0) return;
+  const assetIds = new Set(revealedAssets.map((n) => n.id));
 
-  // Center the freshly-laid-out subgraph within the (much larger) shared
-  // canvas so panToNode's math still works unchanged.
-  const offsetX = (graphState.canvasWidth - layoutW) / 2;
-  const offsetY = (graphState.canvasHeight - layoutH) / 2;
-  subNodes.forEach((n) => {
+  // --- Backbone depth: longest revealed asset->asset chain (BFS from roots).
+  const out = new Map(revealedAssets.map((n) => [n.id, []]));
+  const indeg = new Map(revealedAssets.map((n) => [n.id, 0]));
+  graphState.edges.forEach((e) => {
+    if (assetIds.has(e.source) && assetIds.has(e.target)) {
+      out.get(e.source).push(e.target);
+      indeg.set(e.target, indeg.get(e.target) + 1);
+    }
+  });
+  const depth = new Map();
+  const queue = revealedAssets.filter((n) => indeg.get(n.id) === 0).map((n) => n.id);
+  if (queue.length === 0) queue.push(revealedAssets[0].id);
+  queue.forEach((id) => depth.set(id, 0));
+  for (let qi = 0; qi < queue.length; qi++) {
+    const id = queue[qi];
+    out.get(id).forEach((target) => {
+      // Shortest-path (first-visit) depth -- immune to process-flow cycles
+      // like Column -> V-201 -> P-102 -> Column, which longest-path depth
+      // would stretch into an artificially long backbone.
+      if (!depth.has(target)) {
+        depth.set(target, (depth.get(id) || 0) + 1);
+        queue.push(target);
+      }
+    });
+  }
+  revealedAssets.forEach((n) => {
+    if (!depth.has(n.id)) depth.set(n.id, 0);
+  });
+
+  // --- Place assets column by column along the backbone.
+  const byDepth = new Map();
+  revealedAssets
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .forEach((n) => {
+      const d = depth.get(n.id);
+      if (!byDepth.has(d)) byDepth.set(d, []);
+      byDepth.get(d).push(n);
+    });
+  // Deep chains compress their column spacing so the whole backbone still
+  // fits at a readable zoom.
+  const maxDepthVal = Math.max(...byDepth.keys());
+  const colSpacing = maxDepthVal >= 3 ? 250 : BACKBONE_COL_SPACING;
+  byDepth.forEach((group, d) => {
+    group.forEach((n, i) => {
+      n.x = d * colSpacing;
+      n.y = -d * 24 + (i - (group.length - 1) / 2) * 240;
+    });
+  });
+
+  // --- Fan each asset's revealed record leaves around it.
+  const placed = new Set();
+  revealedAssets.forEach((asset) => {
+    const seen = new Set();
+    const leaves = (graphState.edgesByNode.get(asset.id) || [])
+      .map(({ other }) => other)
+      .filter(
+        (o) =>
+          o && idSet.has(o.id) && o.label !== "Asset" && !placed.has(o.id) && !seen.has(o.id) && seen.add(o.id)
+      )
+      .sort((a, b) => (a.label + a.id).localeCompare(b.label + b.id));
+    if (leaves.length === 0) return;
+
+    // Full circle when the asset stands alone; two arcs (above + below)
+    // when backbone neighbors exist, keeping the horizontal chain clear.
+    const hasBackboneNeighbor = (graphState.edgesByNode.get(asset.id) || []).some(
+      ({ other }) => other && other.id !== asset.id && assetIds.has(other.id)
+    );
+    const arcs = hasBackboneNeighbor ? [[30, 150], [210, 330]] : [[0, 360]];
+    const totalArc = arcs.reduce((sum, [a, b]) => sum + (b - a), 0);
+
+    const typeCounts = {};
+    leaves.forEach((o) => {
+      typeCounts[o.label] = (typeCounts[o.label] || 0) + 1;
+    });
+    // Wider spacing when captions are visible; tight packing for bulk
+    // (label-hidden) dots like an alarm flood.
+    const bulky = Object.values(typeCounts).some((c) => c > LEAF_LABEL_LIMIT);
+    const spacingPx = bulky ? 34 : 78;
+
+    // Chunk into concentric rings sized by each ring's circumference.
+    let remaining = leaves;
+    let ring = 0;
+    while (remaining.length > 0) {
+      const radius = LEAF_BASE_RADIUS + ring * LEAF_RING_GAP;
+      const capacity = Math.max(5, Math.floor(((totalArc / 360) * 2 * Math.PI * radius) / spacingPx));
+      const items = remaining.slice(0, capacity);
+      remaining = remaining.slice(capacity);
+      items.forEach((o, j) => {
+        let deg = ((j + 0.5) / items.length) * totalArc;
+        for (const [a, b] of arcs) {
+          const span = b - a;
+          if (deg <= span) {
+            deg = a + deg;
+            break;
+          }
+          deg -= span;
+        }
+        const rad = (deg * Math.PI) / 180;
+        o.x = asset.x + radius * Math.cos(rad);
+        o.y = asset.y + radius * Math.sin(rad);
+        o.el.classList.toggle("label-hidden", (typeCounts[o.label] || 0) > LEAF_LABEL_LIMIT);
+        placed.add(o.id);
+      });
+      ring++;
+    }
+  });
+
+  // --- Fallback row for records whose parent asset isn't revealed (rare
+  // once parents are auto-revealed, but never leave a node at its stale
+  // full-graph force position -- that's what made the old view stretch the
+  // fit out to a tiny zoom).
+  const orphans = graphState.nodes
+    .filter((n) => idSet.has(n.id) && n.label !== "Asset" && !placed.has(n.id))
+    .sort((a, b) => (a.label + a.id).localeCompare(b.label + b.id));
+  if (orphans.length > 0) {
+    let placedMaxY = -Infinity;
+    let placedMidX = 0;
+    let count = 0;
+    graphState.nodes.forEach((n) => {
+      if (!idSet.has(n.id) || orphans.includes(n)) return;
+      placedMaxY = Math.max(placedMaxY, n.y);
+      placedMidX += n.x;
+      count++;
+    });
+    placedMidX = count ? placedMidX / count : 0;
+    if (placedMaxY === -Infinity) placedMaxY = 0;
+    orphans.forEach((o, i) => {
+      o.x = placedMidX + (i - (orphans.length - 1) / 2) * 130;
+      o.y = placedMaxY + 170;
+      o.el.classList.remove("label-hidden");
+      placed.add(o.id);
+    });
+  }
+
+  // --- Center the whole arrangement on the shared canvas + write DOM.
+  const nodes = graphState.nodes.filter((n) => idSet.has(n.id));
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  nodes.forEach((n) => {
+    minX = Math.min(minX, n.x);
+    maxX = Math.max(maxX, n.x);
+    minY = Math.min(minY, n.y);
+    maxY = Math.max(maxY, n.y);
+  });
+  const offsetX = graphState.canvasWidth / 2 - (minX + maxX) / 2;
+  const offsetY = graphState.canvasHeight / 2 - (minY + maxY) / 2;
+  nodes.forEach((n) => {
     n.x += offsetX;
     n.y += offsetY;
     n.el.setAttribute("transform", `translate(${n.x} ${n.y})`);
   });
-
   graphState.edges.forEach((edge) => {
     if (idSet.has(edge.source) && idSet.has(edge.target)) {
-      const fromNode = graphState.nodesById.get(edge.source);
-      const toNode = graphState.nodesById.get(edge.target);
-      const d = curvedEdgePath(fromNode, toNode);
+      const d = curvedEdgePath(graphState.nodesById.get(edge.source), graphState.nodesById.get(edge.target));
       edge.pathEl.setAttribute("d", d);
       edge.hitEl.setAttribute("d", d);
     }
   });
+}
+
+// Zoom/pan the walk viewport so the entire scoped subgraph is visible with
+// padding -- called when an answer settles (and by the ⤢ fit button).
+function fitScopedView() {
+  const nodes = graphState.nodes.filter((n) => graphState.revealedIds.has(n.id));
+  if (nodes.length === 0) return;
+  const pad = 90;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  nodes.forEach((n) => {
+    minX = Math.min(minX, n.x);
+    maxX = Math.max(maxX, n.x);
+    minY = Math.min(minY, n.y);
+    maxY = Math.max(maxY, n.y);
+  });
+  const viewportW = graphViewport.clientWidth || 760;
+  const viewportH = graphViewport.clientHeight || 420;
+  const w = maxX - minX + pad * 2;
+  const h = maxY - minY + pad * 2;
+  graphState.zoom = Math.min(1, Math.max(0.4, Math.min(viewportW / w, viewportH / h)));
+  graphState.pan.x = viewportW / 2 - ((minX + maxX) / 2) * graphState.zoom;
+  graphState.pan.y = viewportH / 2 - ((minY + maxY) / 2) * graphState.zoom;
+  updateGraphTransform();
 }
 
 // Called from a chat answer's "Focus in explorer" action (also triggered
@@ -1214,6 +1474,32 @@ function layoutScopedSubgraph(nodeIds) {
 // every evidence/relationship node referenced by this specific answer, dims
 // everything else, and pans the viewport to the entity. This is the direct
 // link between "the agent reasoned about this" and the always-visible graph.
+// The full text of the last answer (headline + analysis + recommendations) --
+// used to decide which revealed records the answer ACTUALLY CITES by name
+// (e.g. "WO-4471", "DCS-A-0450"), so only those get the loud red treatment.
+let lastAnswerText = "";
+
+// Which revealed nodes deserve the red "settled" highlight: the resolved
+// entity, every revealed asset (the causal backbone), any record id the
+// answer text names, and the trended tags shown as charts. Everything else
+// the reasoning touched stays visible but quiet (.context) -- this is what
+// keeps a 16-record context pull from reading as an explosion of equal-
+// weight red dots.
+function computeCitedIds(panel) {
+  const cited = new Set([panel.entity_id]);
+  (panel.charts || []).forEach((c) => {
+    if (c.tag) cited.add(c.tag);
+  });
+  graphState.revealedIds.forEach((id) => {
+    const node = graphState.nodesById.get(id);
+    if (!node) return;
+    if (node.label === "Asset" || (lastAnswerText && lastAnswerText.includes(id))) {
+      cited.add(id);
+    }
+  });
+  return cited;
+}
+
 function focusAnswerInGraph(panel) {
   if (!panel || !panel.entity_id || !graphState.nodesById.has(panel.entity_id)) return;
   showWalkTab(); // an answer's highlighted evidence lives on the Reasoning Walk tab, not the schema overview
@@ -1223,25 +1509,45 @@ function focusAnswerInGraph(panel) {
   (panel.timeline || []).forEach((t) => t.ref && refs.add(t.ref));
   (panel.evidence || []).forEach((e) => e.ref && refs.add(e.ref));
 
-  revealNodes(refs);
-  layoutScopedSubgraph(graphState.revealedIds);
+  // Pull in the parent Asset of every cited record, so cross-asset evidence
+  // shows its full hop -- e.g. the Column answer citing E-101's cleaning
+  // work order reveals E-101 itself, completing the visible causal chain
+  // (E-101 -> H-101 -> Column) instead of leaving the record floating.
+  [...refs].forEach((id) => {
+    const node = graphState.nodesById.get(id);
+    if (!node || node.label === "Asset") return;
+    (graphState.edgesByNode.get(id) || []).forEach(({ other }) => {
+      if (other && other.label === "Asset") refs.add(other.id);
+    });
+  });
 
-  // Everything this answer cites turns red ("settled"); anything else the
-  // walk happened to pass through stays visible but dimmed.
+  revealNodes(refs);
+  assignScopedLayout(graphState.revealedIds);
+
+  // Visual hierarchy: red for the backbone + evidence the answer names;
+  // quiet ".context" for everything else the reasoning merely touched.
   clearHighlight();
+  const cited = computeCitedIds(panel);
   graphState.nodes.forEach((node) => {
     if (!graphState.revealedIds.has(node.id)) return;
-    node.el.classList.toggle("highlighted", refs.has(node.id));
-    node.el.classList.toggle("dimmed", !refs.has(node.id));
+    node.el.classList.toggle("highlighted", cited.has(node.id));
+    node.el.classList.toggle("context", !cited.has(node.id));
   });
   graphState.edges.forEach((edge) => {
-    if (refs.has(edge.source) && refs.has(edge.target)) {
+    if (cited.has(edge.source) && cited.has(edge.target)) {
       edge.el.classList.add("highlighted");
     }
   });
 
-  graphState.zoom = 1; // reset in case a previous answer left it zoomed out
-  panToNode(panel.entity_id, { select: true });
+  // Ring the entity as the answer's anchor (.anchor, distinct from .selected
+  // which means "pinned by a click") WITHOUT pinning the inspector over the
+  // graph -- hover/click still opens it on demand.
+  unpinInspector();
+  plantGraph.querySelectorAll(".node.anchor").forEach((n) => n.classList.remove("anchor"));
+  const entityNode = graphState.nodesById.get(panel.entity_id);
+  if (entityNode) entityNode.el.classList.add("anchor");
+
+  fitScopedView(); // show the whole scoped subgraph, not a 100% crop of it
 }
 
 // Time each walk step stays "current" before advancing, in ms. Long walks
@@ -1585,6 +1891,7 @@ const OVERVIEW_LAYOUT = [
 
 function renderTypeInspector(label, count) {
   inspector.classList.add("show");
+  inspector.classList.remove("pinned"); // schema-type peek is always transient
   inspector.innerHTML = "";
   const title = document.createElement("p");
   title.className = "inspector-title";
@@ -1646,13 +1953,27 @@ function overviewNode(cx, cy, r, color, label, count, labelInside = false) {
   g.appendChild(labelText);
 
   g.addEventListener("mouseenter", () => renderTypeInspector(label, count));
-  g.addEventListener("mouseleave", () => resetInspectorToDefault());
+  g.addEventListener("mouseleave", () => hideInspectorPreview());
   return g;
 }
 
 // Schema edge with an always-visible relation name at its midpoint, a hover
 // highlight, and a cursor tooltip carrying the full name + live record count.
-function overviewEdge(parent, x1, y1, x2, y2, labelText, tooltipText) {
+function overviewEdge(parent, x1, y1, x2, y2, labelText, tooltipText, r1 = 0, r2 = 0) {
+  // Trim both ends back to each circle's boundary (plus a 2px breathing gap)
+  // instead of drawing center-to-center -- a line crossing under the node
+  // fill reads as "through", not "connected to".
+  const fullDx = x2 - x1;
+  const fullDy = y2 - y1;
+  const fullLen = Math.sqrt(fullDx * fullDx + fullDy * fullDy) || 1;
+  const ux = fullDx / fullLen;
+  const uy = fullDy / fullLen;
+  const gap = 2;
+  x1 += ux * (r1 + gap);
+  y1 += uy * (r1 + gap);
+  x2 -= ux * (r2 + gap);
+  y2 -= uy * (r2 + gap);
+
   const line = document.createElementNS(SVG_NS, "line");
   line.setAttribute("x1", String(x1));
   line.setAttribute("y1", String(y1));
@@ -1744,7 +2065,9 @@ function renderOntologyOverview(rawNodes, rawEdges) {
       item.x,
       item.y,
       item.edgeType,
-      `Asset —${item.edgeType}→ ${item.label} · ${n} link${n === 1 ? "" : "s"}`
+      `Asset —${item.edgeType}→ ${item.label} · ${n} link${n === 1 ? "" : "s"}`,
+      centerR,
+      overviewRadius(counts[item.label])
     );
   });
 
@@ -1789,7 +2112,27 @@ function curvedEdgePath(fromNode, toNode) {
   const ny = dx / dist;
   const cx = mx + nx * curvature;
   const cy = my + ny * curvature;
-  return `M ${fromNode.x} ${fromNode.y} Q ${cx} ${cy} ${toNode.x} ${toNode.y}`;
+
+  // Pull each endpoint back to its node's boundary (+2px gap) so the curve
+  // meets the circle instead of running under it. A quadratic bezier's
+  // tangent at each end points at the control point, so that's the
+  // direction to trim along.
+  const [sx, sy] = trimToward(fromNode.x, fromNode.y, cx, cy, nodeRadius(fromNode) + 2);
+  const [ex, ey] = trimToward(toNode.x, toNode.y, cx, cy, nodeRadius(toNode) + 2);
+  return `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
+}
+
+// Move (px,py) `amount` px toward (tx,ty).
+function trimToward(px, py, tx, ty, amount) {
+  const dx = tx - px;
+  const dy = ty - py;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const t = Math.min(amount / len, 0.45); // never collapse a short edge to nothing
+  return [px + dx * t, py + dy * t];
+}
+
+function nodeRadius(node) {
+  return (node && NODE_RADIUS[node.label]) || 7;
 }
 
 // Cursor-following tooltip shared by both graph views -- instant and styled,
@@ -1957,12 +2300,12 @@ async function loadPlantGraph() {
     label.textContent = truncateLabel(nodeLabelText(node));
     el.appendChild(label);
 
-    el.addEventListener("click", () => selectNode(node.id));
+    el.addEventListener("click", () => pinInspector(node.id));
     // Hover preview: shows the node's info immediately on hover, reverting
     // to whatever's pinned (or the default hint) once the mouse leaves --
     // clicking still pins it so it stays visible after moving away.
     el.addEventListener("mouseenter", () => renderInspector(node));
-    el.addEventListener("mouseleave", () => resetInspectorToDefault());
+    el.addEventListener("mouseleave", () => hideInspectorPreview());
     plantGraph.appendChild(el);
     node.el = el;
     return node;
@@ -2020,17 +2363,12 @@ function fitActiveView() {
     applyOverviewTransform();
     return;
   }
-  graphState.zoom = 1;
-  if (lastPanel && lastPanel.entity_id && graphState.revealedIds.has(lastPanel.entity_id)) {
-    panToNode(lastPanel.entity_id);
+  if (graphState.revealedIds.size > 0) {
+    fitScopedView(); // frame the whole scoped subgraph
     return;
   }
-  const first = graphState.revealedIds.values().next().value;
-  if (first) {
-    panToNode(first);
-  } else {
-    updateGraphTransform();
-  }
+  graphState.zoom = 1;
+  updateGraphTransform();
 }
 
 graphViewport.addEventListener("mousedown", (e) => {

@@ -162,20 +162,30 @@ fewer turns the way independent lookups can):
 5. If the loop exhausts all turns without a final answer, yields a low-confidence "inconclusive within the
    tool-call budget" final event (still includes the full `trace` as evidence).
 
-**Required 3-section Markdown output format** (enforced only by prompt instruction, not by a schema/grammar):
+**Markdown output format, matched to the question type** (enforced only by prompt instruction, not by a
+schema/grammar):
 ```
-## Headline
+## Headline                     <- always
 <= 12 words, no trailing period — shown as the big bold UI title
 
-## Root Cause
+## Root Cause                   <- diagnostic questions ("why is X", "what caused Y")
+   ...or...
+## Summary                      <- informational/lookup questions ("show me everything about X")
 3-5 sentences, cites specific evidence (work order IDs, action IDs, tag names)
 
-## Recommended Actions
-2-4 short bullet points
+## Recommended Actions          <- ONLY when diagnostic, or the evidence genuinely calls for action;
+2-4 short bullet points            omitted entirely for pure lookup/status questions
 ```
-`_split_agent_response()` (regex on `^#{1,3}\s*<Heading>\s*$`, `re.MULTILINE`) parses this. **It never
+> **Why the conditional sections** (changed 2026-07-29): the prompt previously demanded all three
+> headings on *every* answer, so a pure lookup like "show me everything about P-101" was pushed into
+> asserting a "Root Cause" and inventing "Recommended Actions" it had no basis for. The frontend already
+> renders each section conditionally (`data.recommendation` / non-empty evidence / non-empty charts), so
+> omitting a section server-side is all that was needed for the UI to drop it cleanly.
+
+`_split_agent_response()` (regex on `^#{1,3}\s*<Heading>\s*$`, `re.MULTILINE`) parses this; the body
+heading regex accepts `Root Cause`, `Summary`, or `Analysis`. **It never
 raises** — any section it can't find just becomes `None` (recommendation) or falls back to "put everything
-in root_cause" (if even `## Root Cause` is missing). This graceful degradation matters because prompt-only
+in root_cause" (if even the body heading is missing). This graceful degradation matters because prompt-only
 formatting is not guaranteed; a model that ignores the format still produces a usable (if less structured)
 answer instead of breaking the response.
 
@@ -437,10 +447,21 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
 - **Post-hoc** (deterministic mode, no live events): `animateGraphWalk(panel)` replays `panel.walk` step
   by step. Long walks fast-forward: >20 steps drop from 550ms to 110ms per step (`walkStepDelay()`), so
   TK-201's 122-step alarm-flood walk takes ~13s instead of ~67s (and renders as a striking radial burst).
-- Both paths settle into `focusAnswerInGraph(panel)`: the answer's cited refs re-laid-out compactly
-  (`layoutScopedSubgraph()` — re-runs the force layout on just the revealed nodes, then orients the result
-  along a gentle horizontal axis), highlighted red, walk-passthrough extras dimmed, view panned to the
-  entity. A new question (`resetWalkScope()`) clears the scope back to empty.
+- Both paths settle into `focusAnswerInGraph(panel)`, which (redesigned 2026-07-29 after demo-run
+  feedback that the settled view read as "random and overwhelming"):
+  - **Lays the subgraph out deterministically** (`assignScopedLayout()`, replacing the old per-run force
+    scatter): revealed Asset nodes sit on a left-to-right process backbone ordered by their revealed
+    FEEDS/COOLS chain depth; each asset's records fan around it in sorted, type-grouped arcs (full circle
+    for a standalone asset, above/below arcs when backbone neighbors exist), on concentric rings when one
+    ring can't hold them. Record types with >12 instances hide their labels (`.label-hidden`; hover shows
+    one) — an alarm flood becomes a tidy unlabeled radial burst. Same answer → same picture, every run.
+  - **Applies a visual hierarchy** (`computeCitedIds()`): red `.highlighted` only for the asset backbone,
+    the charted historian tags, and records the answer text names by id (e.g. "WO-4471"); everything else
+    the reasoning merely touched gets quiet `.context` (45% opacity). Red edges only between cited nodes.
+  - **Fits the viewport to the whole subgraph** (`fitScopedView()`, also behind the ⤢ button) instead of
+    a 100% crop, rings the entity as the anchor, and no longer auto-pins the inspector over the graph
+    (hover/click still opens it).
+  A new question (`resetWalkScope()`) clears the scope back to empty.
 - The floating **Reasoning trace** panel (top-right) numbers each step's narration and has play/step/reset
   controls to re-watch the walk; the explorer header shows a monospace counter ("Showing N of 162 nodes
   (scoped to this answer)").
@@ -448,7 +469,20 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   inspector; walk edges get the same wide-hit-path cursor tooltip ("P-101 —FEEDS→ E-101").
 - **Zoom/fit** (shared stack, both tabs): +/− buttons, cursor-anchored wheel zoom, click-drag pan, and a
   ⤢ fit button (overview → natural framing; walk → re-center on the answer's entity at 100%).
-- **Dark mode is still the default theme**, same inline head-script/`applyTheme()` mechanism.
+- **Light mode is the default theme** (switched from dark on 2026-07-29 — it reads better for the demo),
+  same inline head-script/`applyTheme()` mechanism; a saved `localStorage.theme` still wins.
+- **Node inspector modes**: hovering a node is a *transient peek* — moving off it (or off the whole
+  viewport, or switching tabs) always dismisses it, so the panel can't sit stale over the canvas.
+  *Clicking* pins it: red border, a ✕ to dismiss, taller, and the content scrolls internally
+  (`.inspector.pinned .inspector-body`) so an asset with 15 connections is readable rather than clipped.
+  `.node.selected` now means "pinned by click"; the answer entity's dashed ring is `.node.anchor`.
+- **Edges stop at node boundaries** in both views rather than running center-to-center under the node
+  fill: straight schema edges trim by each circle's radius + 2px, and the walk's quadratic curves trim
+  along their end tangents (`trimToward()`, which points at the bezier control point).
+- **The legend is contextual** (`updateLegend()`): hidden entirely on the Ontology Overview (every node
+  there already shows its type as a caption, so it was pure redundancy), and on the walk it lists only
+  the record types actually present in the current scoped subgraph, plus two rows that teach the color
+  language ("examining now" = blue, "cited in answer" = red). Typically 4-7 rows instead of a fixed 9.
 
 
 ---

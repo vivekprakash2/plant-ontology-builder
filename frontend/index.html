@@ -7,10 +7,10 @@
 <link rel="icon" type="image/png" href="/logo.png">
 <script>
   // Applied before the stylesheet renders anything, so there's no flash of
-  // the wrong theme. Dark mode is the default when no preference is saved.
+  // the wrong theme. Light mode is the default when no preference is saved.
   (function () {
     var saved = localStorage.getItem("theme");
-    document.documentElement.setAttribute("data-theme", saved === "light" ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", saved === "dark" ? "dark" : "light");
   })();
 </script>
 <link
@@ -98,16 +98,21 @@
             <div class="log-body" id="traceLogBody"></div>
           </div>
 
+          <!-- Contextual key: only the record types actually present in the
+               current scoped subgraph are shown (see updateLegend()), so this
+               stays a 3-4 item key rather than a static 9-item bar. Hidden
+               entirely on the Ontology Overview, where every node already
+               carries its type name as a caption. -->
           <div class="graph-legend" id="graphLegend">
-            <span class="legend-item"><i class="legend-swatch" style="background:#f9c74f"></i>Asset</span>
-            <span class="legend-item"><i class="legend-swatch" style="background:#f94144"></i>Alarm</span>
-            <span class="legend-item"><i class="legend-swatch" style="background:#577590"></i>Work Order</span>
-            <span class="legend-item"><i class="legend-swatch" style="background:#f8961e"></i>Operator Action</span>
-            <span class="legend-item"><i class="legend-swatch" style="background:#9b5de5"></i>Health Event</span>
-            <span class="legend-item"><i class="legend-swatch" style="background:#43aa8b"></i>Cost Posting</span>
-            <span class="legend-item"><i class="legend-swatch" style="background:#adb5bd"></i>Historian Tag</span>
-            <span class="legend-item"><i class="legend-line" style="background:var(--accent-blue)"></i>walk in progress</span>
-            <span class="legend-item"><i class="legend-line" style="background:var(--accent-red)"></i>settled answer</span>
+            <span class="legend-item" data-labels="Asset"><i class="legend-swatch" style="background:#f9c74f"></i>Asset</span>
+            <span class="legend-item" data-labels="AlarmEvent,AlarmConfig"><i class="legend-swatch" style="background:#f94144"></i>Alarm</span>
+            <span class="legend-item" data-labels="WorkOrder"><i class="legend-swatch" style="background:#577590"></i>Work Order</span>
+            <span class="legend-item" data-labels="OperatorAction"><i class="legend-swatch" style="background:#f8961e"></i>Operator Action</span>
+            <span class="legend-item" data-labels="HealthEvent"><i class="legend-swatch" style="background:#9b5de5"></i>Health Event</span>
+            <span class="legend-item" data-labels="CostPosting"><i class="legend-swatch" style="background:#43aa8b"></i>Cost Posting</span>
+            <span class="legend-item" data-labels="HistorianTag"><i class="legend-swatch" style="background:#adb5bd"></i>Historian Tag</span>
+            <span class="legend-item" data-always="1"><i class="legend-line" style="background:var(--accent-blue)"></i>examining now</span>
+            <span class="legend-item" data-always="1"><i class="legend-line" style="background:var(--accent-red)"></i>cited in answer</span>
           </div>
 
           <div class="inspector" id="inspector"></div>
