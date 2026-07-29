@@ -30,7 +30,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from .graph import KnowledgeGraph, historian_series
 from .llm_provider import NullTextGenerationProvider, get_text_generation_provider
@@ -610,6 +610,11 @@ _AGENT_SYSTEM_PROMPT = (
     "(Alarm Management, Asset Performance Monitoring, DCS/control, Historian, CMMS/maintenance, "
     "ERP) into one physical-asset view, plus the plant's physical process-flow relationships.\n"
     "Rules:\n"
+    "0. Before doing anything else, call write_plan with your initial step-by-step investigation "
+    "plan (3-6 short steps covering what you intend to check and why). Call write_plan again "
+    "whenever a step's status changes (mark it 'in_progress' as you start it, 'done' once its "
+    "finding is in hand) or your plan needs to change based on what you find -- this is shown "
+    "live to the user as a checklist, so keep it accurate and current.\n"
     "1. ALWAYS use the tools to look up real data before answering -- never invent facts, IDs, "
     "numbers, or dates. If a tool returns an error or empty result, say so rather than guessing.\n"
     "2. Start with list_assets if you don't already know the exact unified_id for the asset in "
@@ -769,9 +774,47 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_plan",
+            "description": (
+                "Write or update your step-by-step investigation plan, shown live to the user as a "
+                "checklist. Call this FIRST, before any other tool, with your initial plan (3-6 "
+                "short steps). Call it again any time a step's status changes (mark 'in_progress' "
+                "while working on it, 'done' once its finding is in hand) or your plan changes based "
+                "on what you find."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {
+                                    "type": "string",
+                                    "description": "Short description of this step, e.g. 'Check P-101 vibration trend'.",
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "done"],
+                                },
+                            },
+                            "required": ["text", "status"],
+                            "additionalProperties": False,
+                        },
+                    }
+                },
+                "required": ["steps"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
-_MAX_AGENT_TURNS = 6
+_MAX_AGENT_TURNS = 7
 
 # Node labels that hold free-text/content fields worth searching, mapped to
 # the plant IT system that produces them (matches the system names used
@@ -1032,19 +1075,88 @@ def _trend_result_for_llm(result: Any) -> Any:
     return result
 
 
-def _run_agentic(
+_VALID_PLAN_STATUSES = {"pending", "in_progress", "done"}
+
+
+def _normalize_plan_steps(raw: Any) -> list[dict[str, str]]:
+    """Validate/normalize the LLM's write_plan(steps=[...]) argument into a
+    safe [{"text": str, "status": "pending"|"in_progress"|"done"}, ...]
+    list -- never raises, drops anything malformed rather than crashing the
+    stream over a bad plan update."""
+    if not isinstance(raw, list):
+        return []
+    steps = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+        status = str(item.get("status", "pending")).strip().lower()
+        if status not in _VALID_PLAN_STATUSES:
+            status = "pending"
+        steps.append({"text": text, "status": status})
+    return steps
+
+
+def _tool_call_label(entities: list[dict[str, Any]], tool: str, args: dict[str, Any]) -> str:
+    """Human-readable "doing X" label shown the moment a tool call starts
+    (before its result is known) -- e.g. for a live "thinking..." feed.
+    Deliberately simpler/faster than `_walk_step_for_tool_call` (which
+    needs the RESULT to know which graph nodes were touched, only
+    available after execution)."""
+    if tool == "list_assets":
+        return "Listing known assets"
+    if tool == "get_asset_context":
+        return f"Looking up context for {_asset_name(entities, args.get('unified_id', ''))}"
+    if tool == "get_historian_trend":
+        return f"Checking the {args.get('tag', '?')} historian trend"
+    if tool == "get_related_assets":
+        return f"Checking process-flow relationships for {_asset_name(entities, args.get('unified_id', ''))}"
+    if tool == "search_evidence":
+        return f'Searching evidence for "{args.get("query", "")}"'
+    if tool == "get_plant_status_summary":
+        return "Checking plant-wide alarm & work-order status"
+    return f"Calling {tool}"
+
+
+def _run_agentic_events(
     question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph, provider: Any
-) -> AgentAnswer:
-    """Let the configured LLM query the knowledge graph itself via tools and
-    write its own answer. Every tool call + raw result is logged as
-    evidence. Raises if the provider doesn't support tool calling or the
-    call otherwise fails -- callers (see `answer_question`) must catch this
-    and fall back to `_dispatch`."""
+) -> Iterator[dict[str, Any]]:
+    """Generator form of the agentic loop -- yields one event per
+    meaningful step AS IT HAPPENS (plan updates, a tool call starting, a
+    tool call's result), so a caller (see `stream_answer`) can forward them
+    to the frontend live instead of only learning about them after the
+    entire answer is done. Always ends with exactly one
+    `{"type": "final", "answer": AgentAnswer, "plan": [...]}` event.
+
+    Event shapes:
+      - `{"type": "plan", "steps": [{"text", "status"}, ...]}` -- from the
+        model calling `write_plan`.
+      - `{"type": "tool_call", "tool": ..., "arguments": ..., "label": ...}`
+        -- emitted right before executing a (non-plan) tool, so the UI can
+        show "in progress" the moment the model decides to look something
+        up, not just after the lookup finishes.
+      - `{"type": "tool_result", "tool": ..., "walk_step": {...} | None}` --
+        emitted right after execution; `walk_step` (see
+        `_walk_step_for_tool_call`) is the graph node(s) this call touched,
+        for live graph-walk highlighting, or None if it touched nothing
+        resolvable (e.g. an error result).
+
+    Raises if the provider doesn't support tool calling or the call
+    otherwise fails -- same contract as the old `_run_agentic` had; callers
+    must catch this and fall back to `_dispatch`. Note this means a caller
+    that already forwarded some events to a client before a later turn
+    fails will still fall back afterward -- those already-sent events
+    can't be un-sent (a real, accepted tradeoff of streaming vs. a single
+    atomic batch response; see `docs/CHAT_RAG.md`).
+    """
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _AGENT_SYSTEM_PROMPT},
         {"role": "user", "content": question},
     ]
     trace: list[dict[str, Any]] = []
+    plan_steps: list[dict[str, str]] = []
 
     for _ in range(_MAX_AGENT_TURNS):
         # 1600 tokens -- enough headroom for a full "## Headline" + "## Root
@@ -1062,7 +1174,7 @@ def _run_agentic(
             headline, root_cause, recommendation = _split_agent_response(
                 content or "The model returned an empty response."
             )
-            return AgentAnswer(
+            answer = AgentAnswer(
                 asset=_asset_name(entities, primary_id) if primary_id else None,
                 scenario="agentic",
                 answer=root_cause,
@@ -1073,12 +1185,38 @@ def _run_agentic(
                 recommendation=recommendation,
                 headline=headline,
             )
+            yield {"type": "final", "answer": answer, "plan": plan_steps}
+            return
+
         for call in tool_calls:
             name = call["function"]["name"]
             try:
                 call_args = json.loads(call["function"].get("arguments") or "{}")
             except json.JSONDecodeError:
                 call_args = {}
+
+            if name == "write_plan":
+                plan_steps = _normalize_plan_steps(call_args.get("steps"))
+                trace.append(
+                    {"type": "tool_call", "tool": name, "arguments": call_args, "result": {"ok": True}}
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.get("id"),
+                        "content": json.dumps({"ok": True, "steps": plan_steps}),
+                    }
+                )
+                yield {"type": "plan", "steps": plan_steps}
+                continue
+
+            yield {
+                "type": "tool_call",
+                "tool": name,
+                "arguments": call_args,
+                "label": _tool_call_label(entities, name, call_args),
+            }
+
             executor = _TOOL_EXECUTORS.get(name)
             result = executor(entities, kg, call_args) if executor else {"error": f"Unknown tool '{name}'"}
             trace.append({"type": "tool_call", "tool": name, "arguments": call_args, "result": result})
@@ -1089,9 +1227,14 @@ def _run_agentic(
                     "content": json.dumps(_trend_result_for_llm(result), default=str),
                 }
             )
+            yield {
+                "type": "tool_result",
+                "tool": name,
+                "walk_step": _walk_step_for_tool_call(kg, entities, trace[-1]),
+            }
 
     primary_id = _primary_asset_id_from_trace(trace)
-    return AgentAnswer(
+    answer = AgentAnswer(
         asset=_asset_name(entities, primary_id) if primary_id else None,
         scenario="agentic",
         answer="I wasn't able to reach a conclusion within the tool-call budget.",
@@ -1101,6 +1244,21 @@ def _run_agentic(
         asset_id=primary_id,
         headline="Inconclusive within the tool-call budget",
     )
+    yield {"type": "final", "answer": answer, "plan": plan_steps}
+
+
+def _run_agentic(
+    question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph, provider: Any
+) -> AgentAnswer:
+    """Non-streaming callers (e.g. `answer_question`) that only want the
+    finished answer: drains `_run_agentic_events` and returns its one
+    `"final"` event's answer, discarding the intermediate plan/tool-call
+    events. Same raises-on-failure contract as before this was refactored
+    into a generator."""
+    for event in _run_agentic_events(question, entities, kg, provider):
+        if event["type"] == "final":
+            return event["answer"]
+    raise RuntimeError("_run_agentic_events ended without a final event")  # pragma: no cover -- defensive
 
 
 def answer_question(question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph) -> AgentAnswer:
@@ -1115,6 +1273,57 @@ def answer_question(question: str, entities: list[dict[str, Any]], kg: Knowledge
         return _run_agentic(question, entities, kg, provider)
     except Exception:
         return _dispatch(question, entities, kg)
+
+
+def _final_payload(
+    entities: list[dict[str, Any]], kg: KnowledgeGraph, answer: AgentAnswer, plan: list[dict[str, str]]
+) -> dict[str, Any]:
+    """The same JSON shape `/api/chat` has always returned (asset/scenario/
+    answer/headline/recommendation/raw_answer/presented_by/confidence/
+    evidence/panel), plus `plan`, wrapped as a `{"type": "final", ...}` SSE
+    event by `stream_answer`. Factored out so both the streaming and any
+    future non-streaming path build the exact same response shape."""
+    return {
+        "type": "final",
+        "asset": answer.asset,
+        "scenario": answer.scenario,
+        "answer": answer.answer,
+        "headline": answer.headline,
+        "recommendation": answer.recommendation,
+        "raw_answer": answer.raw_answer,
+        "presented_by": answer.presented_by,
+        "confidence": answer.confidence,
+        "evidence": answer.evidence,
+        "panel": build_ui_panel(entities, kg, answer),
+        "plan": plan,
+    }
+
+
+def stream_answer(
+    question: str, entities: list[dict[str, Any]], kg: KnowledgeGraph
+) -> Iterator[dict[str, Any]]:
+    """Streaming counterpart to `answer_question()`, for `/api/chat`'s SSE
+    response: yields `_run_agentic_events`'s plan/tool_call/tool_result
+    events live, ending with one `_final_payload()` event. Falls back to a
+    single final event wrapping the deterministic `_dispatch` answer (no
+    intermediate events -- it's instant, there's nothing to stream) if no
+    LLM is configured or the agentic loop fails for any reason, same
+    fallback discipline as `answer_question`."""
+    provider = get_text_generation_provider()
+    if not isinstance(provider, NullTextGenerationProvider):
+        try:
+            plan: list[dict[str, str]] = []
+            for event in _run_agentic_events(question, entities, kg, provider):
+                if event["type"] == "final":
+                    yield _final_payload(entities, kg, event["answer"], event.get("plan", []))
+                    return
+                if event["type"] == "plan":
+                    plan = event["steps"]
+                yield event
+        except Exception:
+            pass  # fall through to the deterministic path below
+    answer = _dispatch(question, entities, kg)
+    yield _final_payload(entities, kg, answer, plan=[])
 
 
 # --------------------------------------------------------------------------
@@ -1267,6 +1476,129 @@ def _flatten_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return flat
 
 
+# --------------------------------------------------------------------------
+# Graph walk -- the ordered sequence of nodes the reasoning process actually
+# touched, replayed by the frontend (`animateGraphWalk` in frontend/app.js)
+# as a step-by-step highlight across the explorer before settling into
+# `focusAnswerInGraph`'s final all-at-once highlighted state. This is what
+# visually ties "the agent is reasoning" to "here's where on the graph it's
+# currently looking", one step at a time, instead of only ever showing the
+# finished result.
+# --------------------------------------------------------------------------
+
+
+def _walk_step_for_tool_call(
+    kg: KnowledgeGraph, entities: list[dict[str, Any]], call: dict[str, Any]
+) -> Optional[dict[str, Any]]:
+    """One walk step per agentic tool call, in the exact order the LLM made
+    them. Returns None for a call that touched no real graph node (e.g.
+    `list_assets`, or a tool call whose result was empty/an error) --
+    nothing to visually walk to for that step."""
+    tool = call.get("tool")
+    args = call.get("arguments") or {}
+    result = call.get("result")
+
+    if tool == "get_asset_context":
+        unified_id = args.get("unified_id")
+        if not unified_id or unified_id not in kg.nodes or not isinstance(result, dict):
+            return None
+        node_ids = [unified_id]
+        for rows in result.get("records", {}).values():
+            if not isinstance(rows, list):
+                continue
+            node_ids += [r["id"] for r in rows if isinstance(r, dict) and r.get("id") in kg.nodes]
+        return {
+            "label": f"Pulled cross-system context for {_asset_name(entities, unified_id)}",
+            "node_ids": node_ids,
+        }
+
+    if tool == "get_historian_trend":
+        tag = args.get("tag")
+        if not tag or tag not in kg.nodes:
+            return None
+        return {"label": f"Checked the {tag} historian trend", "node_ids": [tag]}
+
+    if tool == "get_related_assets":
+        unified_id = args.get("unified_id")
+        if not unified_id or unified_id not in kg.nodes or not isinstance(result, list):
+            return None
+        node_ids = [unified_id] + [
+            r["unified_id"] for r in result if isinstance(r, dict) and r.get("unified_id") in kg.nodes
+        ]
+        return {
+            "label": f"Checked process-flow relationships for {_asset_name(entities, unified_id)}",
+            "node_ids": node_ids,
+        }
+
+    if tool == "search_evidence":
+        if not isinstance(result, dict):
+            return None
+        node_ids = [
+            r["id"] for r in result.get("results", []) if isinstance(r, dict) and r.get("id") in kg.nodes
+        ]
+        if not node_ids:
+            return None
+        return {"label": f'Searched evidence for "{args.get("query", "")}"', "node_ids": node_ids}
+
+    if tool == "get_plant_status_summary":
+        if not isinstance(result, dict):
+            return None
+        node_ids = []
+        for key in ("active_alarms", "open_work_orders", "recent_health_events"):
+            node_ids += [
+                r["id"] for r in result.get(key, []) if isinstance(r, dict) and r.get("id") in kg.nodes
+            ]
+        if not node_ids:
+            return None
+        # Capped -- this is a plant-wide snapshot, not meant to highlight
+        # dozens of nodes in one animation frame.
+        return {"label": "Reviewed plant-wide alarm & work-order status", "node_ids": node_ids[:25]}
+
+    # list_assets: touches every asset -- not a meaningful single "step" to
+    # walk to (would just highlight the whole graph at once).
+    return None
+
+
+def build_graph_walk(
+    entities: list[dict[str, Any]], kg: KnowledgeGraph, answer: AgentAnswer
+) -> list[dict[str, Any]]:
+    """Ordered [{label, node_ids}, ...] steps for the frontend to animate
+    through. Works for both reasoning modes:
+      - Agentic mode: one step per tool call (`answer.evidence` is
+        `_run_agentic`'s raw trace) via `_walk_step_for_tool_call`.
+      - Deterministic mode: one step per evidence item gathered by
+        `_dispatch`'s handler, in the order it was gathered -- not as rich
+        as a real tool-call trace, but still reflects the actual order the
+        rule-based logic examined evidence.
+    Returns [] if no asset was resolved for this answer (nothing to walk).
+    """
+    if not answer.asset_id or answer.asset_id not in kg.nodes:
+        return []
+
+    steps = [{"label": f"Start at {_asset_name(entities, answer.asset_id)}", "node_ids": [answer.asset_id]}]
+    seen_node_sets: set[tuple[str, ...]] = set()
+
+    for item in answer.evidence:
+        if item.get("type") == "tool_call":
+            step = _walk_step_for_tool_call(kg, entities, item)
+        else:
+            described = _describe_record(item)
+            if described and described.get("ref") in kg.nodes:
+                step = {"label": described["text"], "node_ids": [described["ref"]]}
+            else:
+                step = None
+
+        if not step or not step["node_ids"]:
+            continue
+        key = tuple(step["node_ids"])
+        if key in seen_node_sets:
+            continue  # skip an exact repeat of the same node set (e.g. a duplicate tool call)
+        seen_node_sets.add(key)
+        steps.append(step)
+
+    return steps
+
+
 def build_ui_panel(
     entities: list[dict[str, Any]], kg: KnowledgeGraph, answer: AgentAnswer
 ) -> Optional[dict[str, Any]]:
@@ -1280,7 +1612,12 @@ def build_ui_panel(
         return None
 
     relationships = [
-        {"type": "alias", "label": f'{m["system"]}:{m["local_id"]}', "ref": answer.asset_id}
+        {
+            "type": "alias",
+            "label": f'{m["system"]}:{m["local_id"]}',
+            # Alias rows are metadata about the selected entity itself.
+            "ref": answer.asset_id,
+        }
         for m in entity["members"]
     ]
     for node, edge in kg.neighbors(answer.asset_id):
@@ -1299,7 +1636,12 @@ def build_ui_panel(
 
     timeline = sorted(
         (
-            {"time": d["time"], "source": d["source"], "text": d["text"], "ref": d["ref"]}
+            {
+                "time": d["time"],
+                "source": d["source"],
+                "text": d["text"],
+                "ref": d.get("ref", ""),
+            }
             for d in described
             if d["time"]
         ),
@@ -1316,7 +1658,7 @@ def build_ui_panel(
             "title": d["source"] + " Record",
             "source": d["ref"] or d["source"],
             "record": d["text"],
-            "ref": d["ref"],
+            "ref": d.get("ref", ""),
         }
         for d in described
         if d["type"] != "historian_trend"
@@ -1355,9 +1697,14 @@ def build_ui_panel(
 
     return {
         "entity": entity["canonical_name"],
-        "entity_id": answer.asset_id,
+        "entity_id": entity["unified_id"],
         "relationships": relationships,
         "timeline": timeline,
         "evidence": evidence_cards,
         "charts": charts,
+        # See build_graph_walk()'s docstring: ordered steps for the
+        # frontend's animated graph-walk, distinct from the flattened/
+        # sorted timeline+evidence above.
+        "walk": build_graph_walk(entities, kg, answer),
     }
+    

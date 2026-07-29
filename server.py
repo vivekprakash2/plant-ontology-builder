@@ -8,7 +8,9 @@ Routes:
     GET  /app.js, /style.css   static frontend assets
     GET  /api/suggestions  the demo questions from TEAM_HANDBOOK.md Sec 7
     GET  /api/graph        the whole plant ontology (nodes/edges) for the explorer panel
-    POST /api/chat         {"question": "..."} -> agent answer + evidence
+    POST /api/chat         {"question": "..."} -> text/event-stream of live plan/tool-call/
+                           tool-result events, ending with one "final" event carrying the same
+                           answer+evidence+panel JSON shape as before (see docs/CHAT_RAG.md §3).
 
 Run:
     python3 server.py
@@ -26,7 +28,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from ontology_builder.agent import answer_question, build_ui_panel
+from ontology_builder.agent import stream_answer
 from ontology_builder.pipeline import load_or_build
 
 ROOT = Path(__file__).resolve().parent
@@ -157,23 +159,25 @@ class ChatHandler(BaseHTTPRequestHandler):
             return
         question = question.strip()[:MAX_QUESTION_LEN]
 
-        result = answer_question(question, _ENTITIES, _KG)
-        panel = build_ui_panel(_ENTITIES, _KG, result)
-        self._send_json(
-            HTTPStatus.OK,
-            {
-                "asset": result.asset,
-                "scenario": result.scenario,
-                "answer": result.answer,
-                "headline": result.headline,
-                "recommendation": result.recommendation,
-                "raw_answer": result.raw_answer,
-                "presented_by": result.presented_by,
-                "confidence": result.confidence,
-                "evidence": result.evidence,
-                "panel": panel,
-            },
-        )
+        # Server-Sent Events: one "data: <json>\n\n" line per live event from
+        # stream_answer() (plan updates, tool-call start, tool-call result),
+        # ending with one "final" event carrying the same response shape
+        # /api/chat always returned before this was streamed. Headers are
+        # sent up front (status can't change once the stream starts) --
+        # stream_answer() itself never raises (it has its own deterministic
+        # fallback), so there's no risk of needing to send an error status
+        # after the stream has already begun.
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        try:
+            for event in stream_answer(question, _ENTITIES, _KG):
+                self.wfile.write(f"data: {json.dumps(event)}\n\n".encode("utf-8"))
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # client navigated away / closed the tab mid-stream -- nothing to do
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
         print(f"{self.address_string()} - {format % args}")

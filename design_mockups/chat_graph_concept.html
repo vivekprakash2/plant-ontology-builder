@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<!--
+  BRAINSTORM MOCKUP ONLY — not wired to server.py / app.js / real data.
+  Purpose: explore a "chat left / traditional node-link ontology right" layout
+  with live graph-walk highlighting (focused node, traversed edges, active tool call).
+  Static content only (no external requests, no user input reflected to DOM) — safe to open locally.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Concept: Chat + Live Ontology Walk (Mockup)</title>
+<style>
+  :root{
+    --bg: #0b0e14;
+    --bg-alt: #10141d;
+    --line: #232a38;
+    --text: #e7ebf3;
+    --muted: #7c8698;
+    --accent: #5eb3ff;
+    --accent-dim: #2c4a63;
+    --amber: #ffb74d;
+    --user-bubble: #1c2a3a;
+    --node-asset: #5eb3ff;
+    --node-alarm: #ff6b6b;
+    --node-wo: #ffb74d;
+    --node-action: #9b8cff;
+    --node-health: #4dd6a8;
+    --node-tag: #6c7686;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+  .callout-note{
+    position:fixed;top:0;left:0;right:0;z-index:50;
+    background:#3a2f0f;color:#ffe6a8;font-size:12px;padding:6px 14px;
+    border-bottom:1px solid #5a4a1a;text-align:center;
+  }
+  .app{
+    display:grid;grid-template-columns: 40% 60%;
+    height:100vh; padding-top:26px;
+  }
+
+  /* ---------- LEFT: CHAT (no cards) ---------- */
+  .chat{
+    display:flex;flex-direction:column;
+    border-right:1px solid var(--line);
+    min-width:0;
+  }
+  .chat-header{
+    padding:16px 22px 12px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;
+  }
+  .chat-header .dot{width:7px;height:7px;border-radius:50%;background:#4dd6a8;
+    box-shadow:0 0 6px #4dd6a8;}
+  .chat-header h1{font-size:14px;font-weight:600;margin:0;letter-spacing:.2px;}
+  .chat-header span{font-size:11px;color:var(--muted);}
+
+  .thread{flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:22px;}
+
+  .msg-user{align-self:flex-end;max-width:78%;}
+  .msg-user .bubble{
+    background:var(--user-bubble);border-radius:14px 14px 2px 14px;
+    padding:9px 14px;font-size:13.5px;line-height:1.5;
+  }
+  .msg-user .ts{font-size:10px;color:var(--muted);text-align:right;margin-top:4px;}
+
+  /* Assistant: plain flowing text, thin accent rule instead of a boxed card */
+  .msg-agent{max-width:92%;padding-left:12px;border-left:2px solid var(--accent-dim);}
+  .msg-agent .headline{font-size:14.5px;font-weight:650;margin-bottom:4px;}
+  .msg-agent .headline .badge{
+    font-size:10px;font-weight:600;color:var(--accent);
+    border:1px solid var(--accent-dim);border-radius:20px;padding:1px 8px;margin-left:8px;
+    vertical-align:middle;
+  }
+  .msg-agent .body{font-size:13px;line-height:1.6;color:#c9d1e0;}
+
+  /* Live reasoning trace — inline breadcrumb, not a card */
+  .trace{
+    display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0 8px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;
+  }
+  .trace .step{
+    color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 7px;
+    background:var(--bg-alt);
+  }
+  .trace .step.done{color:#8fa0b8;}
+  .trace .step.active{
+    color:#0b0e14;background:var(--accent);border-color:var(--accent);font-weight:700;
+    box-shadow:0 0 0 2px rgba(94,179,255,.25);
+  }
+  .trace .arrow{color:var(--line);font-size:11px;}
+
+  .msg-agent .actions summary, .msg-agent .evidence summary{
+    cursor:pointer;font-size:12px;color:var(--muted);margin-top:6px;
+  }
+  .msg-agent .focus-link{
+    display:inline-block;margin-top:8px;font-size:12px;color:var(--accent);
+    cursor:pointer;text-decoration:none;border-bottom:1px dashed var(--accent-dim);
+  }
+
+  .composer{border-top:1px solid var(--line);padding:14px 22px 18px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+  .chip{
+    font-size:11.5px;color:#b7c2d6;border:1px solid var(--line);border-radius:20px;
+    padding:5px 12px;background:transparent;cursor:pointer;
+  }
+  .chip:hover{border-color:var(--accent-dim);color:var(--text);}
+  .input-row{display:flex;align-items:flex-end;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px;}
+  .input-row textarea{
+    flex:1;background:transparent;border:none;color:var(--text);font-size:13.5px;
+    resize:none;outline:none;font-family:inherit;line-height:1.5;
+  }
+  .send-btn{
+    background:var(--accent);color:#08131f;border:none;border-radius:8px;
+    padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;
+  }
+
+  /* ---------- RIGHT: TRADITIONAL NODE-LINK GRAPH ---------- */
+  .graph-pane{display:flex;flex-direction:column;min-width:0;}
+  .graph-status{
+    padding:12px 20px;border-bottom:1px solid var(--line);
+    font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .graph-status .spinner{
+    width:9px;height:9px;border-radius:50%;border:2px solid var(--accent-dim);
+    border-top-color:var(--accent);animation:spin .9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .graph-status b{color:var(--amber);font-weight:600;}
+  .graph-status .path{color:#8fa0b8;margin-left:auto;font-size:11px;}
+
+  .graph-toolbar{
+    display:flex;gap:14px;padding:8px 20px;border-bottom:1px solid var(--line);
+    font-size:11px;color:var(--muted);
+  }
+  .graph-toolbar .filter{cursor:pointer;padding:3px 0;border-bottom:2px solid transparent;}
+  .graph-toolbar .filter.on{color:var(--text);border-color:var(--accent);}
+
+  .canvas-wrap{flex:1;position:relative;overflow:hidden;background:
+    radial-gradient(circle at 30% 20%, #0e1220 0%, #0b0e14 60%);}
+
+  svg{width:100%;height:100%;display:block;}
+
+  .edge-line{stroke:#3a4356;stroke-width:1.4;fill:none;}
+  .edge-line.dim{stroke:#232a38;}
+  .edge-line.active{
+    stroke:var(--amber);stroke-width:2.4;
+    stroke-dasharray:6 5;animation:dash 1s linear infinite;
+    filter:drop-shadow(0 0 3px rgba(255,183,77,.6));
+  }
+  @keyframes dash{to{stroke-dashoffset:-22;}}
+
+  .node circle{stroke-width:2;}
+  .node.dim{opacity:.28;}
+  .node .label{font-size:10.5px;fill:#b7c2d6;text-anchor:middle;font-family:inherit;}
+  .node.dim .label{fill:#4a5566;}
+
+  .node.focused circle.ring{
+    fill:none;stroke:var(--amber);stroke-width:2;opacity:.9;
+    animation:pulse 1.4s ease-out infinite;
+  }
+  @keyframes pulse{
+    0%{ r:16; opacity:.9; }
+    100%{ r:30; opacity:0; }
+  }
+  .node.visited circle.core{stroke:var(--amber);}
+
+  .edge-tooltip{
+    position:absolute;pointer-events:none;background:#161b26;border:1px solid var(--line);
+    color:#dfe6f2;font-size:11px;padding:4px 8px;border-radius:6px;
+    transform:translate(-50%,-130%);white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.4);
+  }
+
+  .legend{
+    position:absolute;right:16px;top:16px;background:rgba(16,20,29,.9);
+    border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:11px;
+    color:#b7c2d6;display:grid;grid-template-columns:1fr 1fr;gap:5px 16px;backdrop-filter:blur(4px);
+  }
+  .legend .row{display:flex;align-items:center;gap:7px;}
+  .legend .swatch{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .legend .line-swatch{width:16px;height:2px;display:inline-block;}
+
+  .callout{
+    position:absolute;font-size:10.5px;color:var(--amber);
+    background:rgba(16,20,29,.92);border:1px solid #4a3a1a;border-radius:6px;
+    padding:3px 7px;max-width:160px;line-height:1.35;
+  }
+  .callout::before{content:"";position:absolute;width:6px;height:6px;background:inherit;
+    border-left:1px solid #4a3a1a;border-bottom:1px solid #4a3a1a;}
+</style>
+</head>
+<body>
+
+<div class="callout-note">MOCKUP — brainstorm only, not the real app. Amber = active graph-walk focus / traversal driven by the agent's current tool call.</div>
+
+<div class="app">
+
+  <!-- ============ LEFT: CHAT ============ -->
+  <div class="chat">
+    <div class="chat-header">
+      <span class="dot"></span>
+      <h1>Plant Ops Copilot</h1>
+      <span>reasoning over 9 assets · Unit 100</span>
+    </div>
+
+    <div class="thread">
+      <div class="msg-user">
+        <div class="bubble">Why is the column differential pressure climbing on C-101?</div>
+        <div class="ts">10:41 AM</div>
+      </div>
+
+      <div class="msg-agent">
+        <div class="headline">Upstream fouling + reflux pump cavitation
+          <span class="badge">reasoning…</span>
+        </div>
+        <div class="trace">
+          <span class="step done">list_assets</span><span class="arrow">→</span>
+          <span class="step done">get_asset_context(C-101)</span><span class="arrow">→</span>
+          <span class="step active">get_related_assets(C-101, FEEDS)</span><span class="arrow">→</span>
+          <span class="step">get_historian_trend(…)</span>
+        </div>
+        <div class="body">
+          Walking upstream from the column now — checking what feeds it before
+          pulling any sensor trends, so the next step targets the right tag window.
+        </div>
+      </div>
+
+      <div class="msg-user">
+        <div class="bubble">is that the same root cause as last week's P-101 alarm?</div>
+        <div class="ts">10:44 AM</div>
+      </div>
+
+      <div class="msg-agent">
+        <div class="headline">No — different root cause
+          <span class="badge" style="color:#4dd6a8;border-color:#1f4a3a;">answered</span>
+        </div>
+        <div class="trace">
+          <span class="step done">get_asset_context(P-101)</span><span class="arrow">→</span>
+          <span class="step done">get_asset_context(K-101)</span><span class="arrow">→</span>
+          <span class="step done">get_historian_trend(COOLING_VALVE_POS)</span>
+        </div>
+        <div class="body">
+          P-101's vibration tracked a seal work order + operator setpoint change.
+          K-101 traces to a stuck cooling valve — a utility problem, not a seal issue.
+        </div>
+        <a class="focus-link">↳ Focus this path in the graph</a>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="chips">
+        <button class="chip">Show me everything on TK-201</button>
+        <button class="chip">What changed in the last 24h?</button>
+        <button class="chip">Any open work orders on Unit 100?</button>
+      </div>
+      <div class="input-row">
+        <textarea rows="1" placeholder="Ask about any asset, alarm, or trend…"></textarea>
+        <button class="send-btn">Ask</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT: TRADITIONAL NODE-LINK GRAPH ============ -->
+  <div class="graph-pane">
+    <div class="graph-status">
+      <span class="spinner"></span>
+      <span>calling <b>get_related_assets(C-101, rel=FEEDS)</b> — walking upstream…</span>
+      <span class="path">C-101 ← H-101 ← E-101 ← P-101</span>
+    </div>
+    <div class="graph-toolbar">
+      <span class="filter on">Assets</span>
+      <span class="filter">Alarms</span>
+      <span class="filter">Work Orders</span>
+      <span class="filter">Operator Actions</span>
+      <span class="filter">Health Events</span>
+      <span class="filter">Historian Tags</span>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <svg id="svg" viewBox="0 0 900 640">
+        <!-- ===== EDGES (topology backbone) ===== -->
+        <g id="edges">
+          <path class="edge-line active" d="M 150,420 C 230,400 260,340 320,300" data-label="FEEDS"/>
+          <path class="edge-line active" d="M 320,300 C 380,270 400,240 430,210" data-label="FEEDS"/>
+          <path class="edge-line active" d="M 430,210 C 480,190 520,190 560,220" data-label="FEEDS"/>
+          <path class="edge-line dim" d="M 560,220 C 600,250 620,280 610,320" data-label="FEEDS"/>
+          <path class="edge-line dim" d="M 610,320 C 590,360 560,390 520,410" data-label="FEEDS"/>
+          <path class="edge-line dim" d="M 150,420 C 130,470 140,510 190,540" data-label="COOLS"/>
+          <path class="edge-line dim" d="M 560,220 C 620,180 680,170 730,190" data-label="SUPPLIES_UTILITY"/>
+
+          <!-- satellite (transactional) edges around focused node -->
+          <path class="edge-line active" d="M 430,210 C 400,170 370,150 340,140" data-label="HAS_ALARM"/>
+          <path class="edge-line dim" d="M 430,210 C 460,160 500,150 530,150" data-label="HAS_WORK_ORDER"/>
+          <path class="edge-line dim" d="M 430,210 C 440,150 430,110 410,80" data-label="HAS_HISTORIAN_TAG"/>
+        </g>
+
+        <!-- ===== NODES ===== -->
+        <g id="nodes">
+          <!-- P-101 -->
+          <g class="node visited" transform="translate(150,420)">
+            <circle class="core" r="13" fill="var(--node-asset)"/>
+            <text class="label" y="26">P-101</text>
+          </g>
+
+          <!-- E-101 -->
+          <g class="node visited" transform="translate(320,300)">
+            <circle class="core" r="13" fill="var(--node-asset)"/>
+            <text class="label" y="26">E-101</text>
+          </g>
+
+          <!-- H-101 -->
+          <g class="node focused" transform="translate(430,210)">
+            <circle class="ring" r="16" fill="none"/>
+            <circle class="core" r="15" fill="var(--node-asset)"/>
+            <text class="label" y="30" style="font-weight:700;fill:#fff;">H-101</text>
+          </g>
+
+          <!-- satellites around H-101 -->
+          <g class="node" transform="translate(340,140)">
+            <circle class="core" r="7" fill="var(--node-alarm)"/>
+            <text class="label" y="18">HH DP alarm</text>
+          </g>
+          <g class="node" transform="translate(530,150)">
+            <circle class="core" r="7" fill="var(--node-wo)"/>
+            <text class="label" y="18">WO-4471</text>
+          </g>
+          <g class="node" transform="translate(410,80)">
+            <circle class="core" r="6" fill="var(--node-tag)"/>
+            <text class="label" y="16">OUT_TEMP_01</text>
+          </g>
+
+          <!-- C-101 (question target, dim for now — walk hasn't reached it) -->
+          <g class="node dim" transform="translate(560,220)">
+            <circle class="core" r="14" fill="var(--node-asset)"/>
+            <text class="label" y="28">C-101</text>
+          </g>
+
+          <!-- downstream / other assets, dimmed -->
+          <g class="node dim" transform="translate(610,320)">
+            <circle class="core" r="11" fill="var(--node-asset)"/>
+            <text class="label" y="24">V-201</text>
+          </g>
+          <g class="node dim" transform="translate(520,410)">
+            <circle class="core" r="11" fill="var(--node-asset)"/>
+            <text class="label" y="24">P-102</text>
+          </g>
+          <g class="node dim" transform="translate(190,540)">
+            <circle class="core" r="11" fill="var(--node-asset)"/>
+            <text class="label" y="24">K-101</text>
+          </g>
+          <g class="node dim" transform="translate(730,190)">
+            <circle class="core" r="11" fill="var(--node-asset)"/>
+            <text class="label" y="24">CV-400</text>
+          </g>
+        </g>
+      </svg>
+
+      <!-- annotation callouts explaining the design language -->
+      <div class="callout" style="left:120px;top:90px;">① focused node — pulsing amber ring = where the agent's reasoning is "standing" right now</div>
+      <div class="callout" style="left:80px;top:420px;">② visited nodes — solid amber ring, dims once the walk moves on</div>
+      <div class="callout" style="left:340px;top:520px;">③ not-yet-visited — grayed out until the agent's tool calls reach it</div>
+      <div class="callout" style="left:120px;top:180px;">④ hover any edge for its relation label (FEEDS / HAS_ALARM / …) — no labels shown by default</div>
+
+      <div class="legend">
+        <div class="row"><span class="swatch" style="background:var(--node-asset)"></span>Asset</div>
+        <div class="row"><span class="swatch" style="background:var(--node-alarm)"></span>Alarm Event</div>
+        <div class="row"><span class="swatch" style="background:var(--node-wo)"></span>Work Order</div>
+        <div class="row"><span class="swatch" style="background:var(--node-action)"></span>Operator Action</div>
+        <div class="row"><span class="swatch" style="background:var(--node-health)"></span>Health Event</div>
+        <div class="row"><span class="swatch" style="background:var(--node-tag)"></span>Historian Tag</div>
+        <div class="row"><span class="line-swatch" style="background:#3a4356"></span>relation (hover for label)</div>
+        <div class="row"><span class="line-swatch" style="background:var(--amber)"></span>agent's current path</div>
+      </div>
+
+      <div class="edge-tooltip" id="tooltip" style="display:none;"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Hover-to-reveal edge labels — "traditional node+edge graph with labels hovering",
+  // labels are hidden by default and only appear near the cursor on hover.
+  const tooltip = document.getElementById('tooltip');
+  const wrap = document.getElementById('canvasWrap');
+  document.querySelectorAll('.edge-line').forEach(path => {
+    path.addEventListener('mousemove', (e) => {
+      const rect = wrap.getBoundingClientRect();
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX - rect.left) + 'px';
+      tooltip.style.top = (e.clientY - rect.top) + 'px';
+      tooltip.textContent = path.dataset.label;
+    });
+    path.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  });
+</script>
+
+</body>
+</html>

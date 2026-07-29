@@ -29,6 +29,7 @@
   --edge-color: #b3becb;
   --timeline-line: rgba(16, 18, 20, 0.24);
   --divider: #e2e6ea;
+  --accent-blue: #277da1;
 }
 
 [data-theme="dark"] {
@@ -61,6 +62,7 @@
   --edge-color: #454d58;
   --timeline-line: rgba(255, 255, 255, 0.18);
   --divider: #2b313a;
+  --accent-blue: #4fb3d9;
 }
 
 * {
@@ -270,6 +272,93 @@ h1 {
 
 .assistant-bubble.pending .thinking {
   animation: pulse-fade 1.2s ease-in-out infinite;
+}
+
+/* Live plan checklist (agent.py's write_plan tool) -- populated/replaced
+   wholesale on every "plan" SSE event. Empty (no plan yet, or the
+   deterministic fallback path which never calls write_plan) collapses to
+   nothing via :empty rather than showing a blank list. */
+.plan-checklist {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.plan-checklist:empty {
+  display: none;
+}
+
+.plan-step {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.plan-step-icon {
+  flex: none;
+  width: 1.1em;
+  text-align: center;
+}
+
+.plan-step-in_progress {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.plan-step-in_progress .plan-step-icon {
+  color: var(--accent-blue);
+  animation: pulse-fade 1s ease-in-out infinite;
+}
+
+.plan-step-done {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.plan-step-done .plan-step-icon {
+  color: var(--accent-green);
+}
+
+/* Live tool-call trace -- one chip per "tool_call" SSE event, appended in
+   real time (the coding-agent-style "thinking / using a tool" feed),
+   marked done once its matching "tool_result" arrives. Mirrors
+   design_mockups/chat_graph_concept.html's .trace chip styling. */
+.trace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+}
+
+.trace:empty {
+  display: none;
+}
+
+.trace-step {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 0.15rem 0.45rem;
+  background: var(--surface);
+}
+
+.trace-step.active {
+  color: #08131f;
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  font-weight: 700;
+  animation: pulse-fade 1s ease-in-out infinite;
+}
+
+.trace-step.done {
+  color: var(--text-muted);
 }
 
 .assistant-headline-row {
@@ -851,6 +940,39 @@ textarea:focus-visible {
   border-width: 2px;
   border-color: var(--accent-black);
   z-index: 6;
+}
+
+/* Graph-walk animation (see agent.py's build_graph_walk() +
+   frontend/app.js's animateGraphWalk()) -- replays the ordered sequence of
+   nodes the reasoning process touched, one step at a time, before settling
+   into the final .highlighted state above. .walk-current is the node(s)
+   the "walk" is on right now (pulsing, distinct blue so it doesn't get
+   confused with the red .highlighted end-state); .walk-visited is the
+   fading trail of steps already passed through. */
+.node.walk-visited {
+  opacity: 1;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(39, 125, 161, 0.16);
+}
+
+.node.walk-current {
+  opacity: 1;
+  border-width: 2px;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 5px rgba(39, 125, 161, 0.3);
+  z-index: 7;
+  animation: pulse-fade 700ms ease-in-out infinite;
+}
+
+.graph-edge.walk-visited {
+  background: var(--accent-blue);
+  opacity: 0.5;
+}
+
+.graph-edge.walk-current {
+  background: var(--accent-blue);
+  height: 2.5px;
+  opacity: 1;
 }
 
 /* Node category colors -- mirrors ontology_builder/viz.py's palette so the

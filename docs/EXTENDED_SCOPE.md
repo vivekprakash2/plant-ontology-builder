@@ -114,7 +114,11 @@ considered and deliberately decided *against*, so they aren't re-litigated from 
 ### Other previously-noted ideas (carried over, still open)
 
 - **Streaming/SSE responses in the chat UI**, so a long agentic answer (30–90+ seconds with Claude Opus)
-  streams incrementally instead of the UI waiting for the full response.
+  streams incrementally instead of the UI waiting for the full response. **Partially addressed 2026-07-29**
+  by the graph-walk feature below, but that's a *post-hoc replay* of an already-finished answer's trace, not
+  real streaming — `/api/chat` is still a single synchronous response and `server.py` is still a
+  single-threaded stdlib `HTTPServer`. True incremental streaming still needs both an async/chunked server
+  and `_run_agentic` restructured to yield per-turn events; still open.
 
 ### Process-topology extraction: real-world prose sourcing
 
@@ -176,6 +180,16 @@ neither built:
   0.1%" against an observed ~0.3% swing, both deterministically and agentically (the agentic answer also
   quoted the config's own `recommended_action` text, "suspected mis-set"). See `docs/ONTOLOGY.md` §3b and
   `docs/CHAT_RAG.md` §6 for the full story. Full 13/13 test suite still passes.
+- **Animated graph walk** (2026-07-29): `agent.py`'s `build_graph_walk()` (+ `_walk_step_for_tool_call()`)
+  turns the answer's already-collected evidence/tool-call trace into an ordered `[{label, node_ids}, ...]`
+  sequence (one step per tool call in agentic mode, exact call order; one step per gathered evidence item in
+  deterministic mode), exposed as `panel.walk`. `frontend/app.js`'s `animateGraphWalk()` replays it as a
+  step-by-step highlight across the Plant Ontology Explorer (each step's nodes pulse blue and the view pans
+  to them, then fade to a trail) before settling into the existing `focusAnswerInGraph()` end state — this is
+  what answers "where is the reasoning currently focused", raised while discussing whether a Neo4j/vis.js-
+  style graph walk was feasible on this project's custom in-memory `KnowledgeGraph`. Verified end-to-end
+  against the live server: a real question returned 6 correctly-ordered steps mapped to real graph node ids.
+  **Explicitly not live/streaming** — see the SSE bullet above, still open. See `docs/CHAT_RAG.md` §3/§4b.
 
 ---
 

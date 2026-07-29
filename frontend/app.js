@@ -355,10 +355,63 @@ function addPendingAssistantBubble() {
   p.className = "muted thinking";
   p.textContent = "Thinking...";
   card.appendChild(p);
+
+  // Populated live as SSE events arrive (see submitQuestion) -- a checklist
+  // of the agent's write_plan steps, and a running breadcrumb trace of
+  // tool calls as they happen, in the style of a coding agent's activity
+  // feed. Both stay empty (and invisible via :empty) for the deterministic
+  // fallback path, which has no intermediate steps to show.
+  const plan = document.createElement("ul");
+  plan.className = "plan-checklist";
+  card.appendChild(plan);
+
+  const trace = document.createElement("div");
+  trace.className = "trace";
+  card.appendChild(trace);
+
   turn.appendChild(card);
   chatThread.appendChild(turn);
   scrollThreadToBottom();
   return turn;
+}
+
+const PLAN_STATUS_ICON = { pending: "○", in_progress: "◐", done: "●" };
+
+// Renders the agent's live write_plan() steps as a checklist (replaced
+// wholesale on every "plan" event -- the model may reorder/add/remove
+// steps, not just flip a status, so a full re-render is simpler and safer
+// than diffing).
+function renderPlanChecklist(container, steps) {
+  container.innerHTML = "";
+  (steps || []).forEach((step) => {
+    const li = document.createElement("li");
+    li.className = `plan-step plan-step-${step.status}`;
+    const icon = document.createElement("span");
+    icon.className = "plan-step-icon";
+    icon.textContent = PLAN_STATUS_ICON[step.status] || PLAN_STATUS_ICON.pending;
+    const text = document.createElement("span");
+    text.textContent = step.text;
+    li.appendChild(icon);
+    li.appendChild(text);
+    container.appendChild(li);
+  });
+}
+
+// One breadcrumb chip per tool call, appended live as "tool_call" events
+// arrive and marked done once the matching "tool_result" arrives -- the
+// coding-agent-style "thinking / using a tool" activity feed.
+function addTraceStep(container, label) {
+  const chip = document.createElement("span");
+  chip.className = "trace-step active";
+  chip.textContent = label;
+  container.appendChild(chip);
+  return chip;
+}
+
+function markTraceStepDone(chip) {
+  if (!chip) return;
+  chip.classList.remove("active");
+  chip.classList.add("done");
 }
 
 function renderAssistantBubble(turnEl, data) {
@@ -473,10 +526,6 @@ function renderAssistantBubble(turnEl, data) {
   turnEl.innerHTML = "";
   turnEl.appendChild(card);
   scrollThreadToBottom();
-
-  if (panel && panel.entity_id) {
-    focusAnswerInGraph(panel);
-  }
 }
 
 async function submitQuestion(question) {
@@ -485,22 +534,95 @@ async function submitQuestion(question) {
   runButton.disabled = true;
   addUserBubble(question);
   const pendingTurn = addPendingAssistantBubble();
+  const card = pendingTurn.querySelector(".assistant-bubble");
+  const thinkingEl = card.querySelector(".thinking");
+  const planEl = card.querySelector(".plan-checklist");
+  const traceEl = card.querySelector(".trace");
+
+  // Reset any highlighting left over from a previous answer before this
+  // one's live events (if any) start arriving.
+  clearHighlight();
+  liveWalkReset();
+  let sawLiveEvent = false;
+  let activeChip = null;
+
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      pendingTurn.querySelector(".thinking").textContent = `Error: ${data.error || "request failed"}`;
-      pendingTurn.querySelector(".assistant-bubble").classList.remove("pending");
+    if (!res.ok || !res.body) {
+      let errMsg = "request failed";
+      try {
+        const errData = await res.json();
+        errMsg = errData.error || errMsg;
+      } catch (parseErr) {
+        /* body wasn't JSON (e.g. a plain-text error page) -- keep the generic message */
+      }
+      thinkingEl.textContent = `Error: ${errMsg}`;
+      card.classList.remove("pending");
       return;
     }
-    renderAssistantBubble(pendingTurn, data);
+
+    // /api/chat streams Server-Sent Events: one "data: <json>\n\n" block per
+    // live event (plan/tool_call/tool_result), ending with one "final"
+    // event carrying the full answer -- see ontology_builder/agent.py's
+    // stream_answer() and docs/CHAT_RAG.md §3.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    readLoop: while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sepIndex;
+      while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+        const rawEvent = buffer.slice(0, sepIndex);
+        buffer = buffer.slice(sepIndex + 2);
+        const dataLine = rawEvent.split("\n").find((l) => l.startsWith("data:"));
+        if (!dataLine) continue;
+        let event;
+        try {
+          event = JSON.parse(dataLine.slice(5).trim());
+        } catch (parseErr) {
+          continue; // malformed event -- skip rather than crash the whole stream
+        }
+
+        if (event.type === "final") {
+          renderAssistantBubble(pendingTurn, event);
+          // If any live tool-call events arrived, the explorer was already
+          // walked live (see liveWalkStep below) -- just settle into the
+          // final highlighted state. Otherwise (deterministic fallback,
+          // which has no live steps) fall back to the post-hoc replay.
+          if (sawLiveEvent) {
+            liveWalkFinish();
+            focusAnswerInGraph(event.panel);
+          } else {
+            animateGraphWalk(event.panel);
+          }
+          break readLoop;
+        }
+
+        sawLiveEvent = true;
+        thinkingEl.style.display = "none";
+
+        if (event.type === "plan") {
+          renderPlanChecklist(planEl, event.steps);
+        } else if (event.type === "tool_call") {
+          activeChip = addTraceStep(traceEl, event.label || event.tool);
+        } else if (event.type === "tool_result") {
+          markTraceStepDone(activeChip);
+          if (event.walk_step) liveWalkStep(event.walk_step);
+        }
+        scrollThreadToBottom();
+      }
+    }
   } catch (err) {
-    pendingTurn.querySelector(".thinking").textContent = "Error: could not reach the server.";
-    pendingTurn.querySelector(".assistant-bubble").classList.remove("pending");
+    thinkingEl.textContent = "Error: could not reach the server.";
+    card.classList.remove("pending");
   } finally {
     runButton.disabled = false;
   }
@@ -831,6 +953,134 @@ function focusAnswerInGraph(panel) {
 
   explorerHint.textContent = `Showing evidence for "${panel.entity}".`;
   panToNode(panel.entity_id, { select: true });
+}
+
+// Time each walk step stays "current" before advancing, in ms.
+const WALK_STEP_DELAY_MS = 550;
+
+// Replays `panel.walk` (see agent.py's build_graph_walk()) as an animated,
+// step-by-step highlight across the explorer -- "here's where the
+// reasoning is looking right now" -- before settling into
+// focusAnswerInGraph()'s final all-at-once highlighted state. This is a
+// post-hoc replay of the already-completed answer's tool-call/evidence
+// trace, not a live view of the agent loop actually running (that would
+// need streaming/SSE from /api/chat, which doesn't exist here -- see
+// docs/CHAT_RAG.md §4b's "Known limitation" note) -- but it's what turns
+// the previous instant snapshot into a visible walk across the graph.
+function animateGraphWalk(panel) {
+  const steps = (panel && panel.walk) || [];
+  if (!panel || !panel.entity_id || !graphState.nodesById.has(panel.entity_id) || steps.length === 0) {
+    focusAnswerInGraph(panel);
+    return;
+  }
+
+  // Reveal whatever categories the whole walk will touch up front, so
+  // nothing pops in/out mid-animation.
+  const allRefs = new Set();
+  steps.forEach((step) => (step.node_ids || []).forEach((id) => allRefs.add(id)));
+  allRefs.forEach((id) => {
+    const node = graphState.nodesById.get(id);
+    if (node) graphState.activeCategories.add(categoryFor(node.label));
+  });
+  renderFilterChips();
+  applyVisibility();
+  clearHighlight();
+
+  function playStep(i) {
+    if (i > 0) {
+      // Demote the previous step's nodes/edges from "current" to a
+      // fading "visited" trail.
+      const prevIds = steps[i - 1].node_ids || [];
+      graphState.nodes.forEach((node) => {
+        if (prevIds.includes(node.id)) {
+          node.el.classList.remove("walk-current");
+          node.el.classList.add("walk-visited");
+        }
+      });
+      graphState.edges.forEach((edge) => {
+        if (prevIds.includes(edge.source) && prevIds.includes(edge.target)) {
+          edge.el.classList.remove("walk-current");
+          edge.el.classList.add("walk-visited");
+        }
+      });
+    }
+
+    if (i >= steps.length) {
+      // Walk finished -- clear the walk-only classes and settle into the
+      // normal "final answer" highlighted state.
+      graphState.nodes.forEach((node) => node.el.classList.remove("walk-current", "walk-visited"));
+      graphState.edges.forEach((edge) => edge.el.classList.remove("walk-current", "walk-visited"));
+      focusAnswerInGraph(panel);
+      return;
+    }
+
+    const step = steps[i];
+    const ids = step.node_ids || [];
+    explorerHint.textContent = step.label;
+    graphState.nodes.forEach((node) => {
+      if (ids.includes(node.id)) node.el.classList.add("walk-current");
+    });
+    graphState.edges.forEach((edge) => {
+      if (ids.includes(edge.source) && ids.includes(edge.target)) edge.el.classList.add("walk-current");
+    });
+    if (ids.length > 0) panToNode(ids[0]);
+
+    setTimeout(() => playStep(i + 1), WALK_STEP_DELAY_MS);
+  }
+
+  playStep(0);
+}
+
+// --- Live graph walk -- driven by real "tool_result" SSE events as they
+// arrive from the server (submitQuestion), instead of animateGraphWalk's
+// post-hoc replay of an already-finished trace. Tracks only the previous
+// step's node ids so each new step can demote them to a fading trail.
+const liveWalk = { prevIds: [] };
+
+function liveWalkReset() {
+  liveWalk.prevIds = [];
+}
+
+function liveWalkStep(step) {
+  const ids = (step && step.node_ids) || [];
+  if (ids.length === 0) return;
+
+  ids.forEach((id) => {
+    const node = graphState.nodesById.get(id);
+    if (node) graphState.activeCategories.add(categoryFor(node.label));
+  });
+  renderFilterChips();
+  applyVisibility();
+
+  graphState.nodes.forEach((node) => {
+    if (liveWalk.prevIds.includes(node.id)) {
+      node.el.classList.remove("walk-current");
+      node.el.classList.add("walk-visited");
+    }
+  });
+  graphState.edges.forEach((edge) => {
+    if (liveWalk.prevIds.includes(edge.source) && liveWalk.prevIds.includes(edge.target)) {
+      edge.el.classList.remove("walk-current");
+      edge.el.classList.add("walk-visited");
+    }
+  });
+
+  graphState.nodes.forEach((node) => {
+    if (ids.includes(node.id)) node.el.classList.add("walk-current");
+  });
+  graphState.edges.forEach((edge) => {
+    if (ids.includes(edge.source) && ids.includes(edge.target)) edge.el.classList.add("walk-current");
+  });
+  panToNode(ids[0]);
+  if (step.label) explorerHint.textContent = step.label;
+
+  liveWalk.prevIds = ids;
+}
+
+function liveWalkFinish() {
+  graphState.nodes.forEach((node) => node.el.classList.remove("walk-current", "walk-visited"));
+  graphState.edges.forEach((edge) => edge.el.classList.remove("walk-current", "walk-visited"));
+  liveWalk.prevIds = [];
 }
 
 function renderFilterChips() {

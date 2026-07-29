@@ -26,11 +26,12 @@ extracted relationships are NEVER trusted directly:
      fuzzy match) to a real unified entity, or the edge is dropped and
      logged -- exactly like a hallucinated/misspelled name in `graph.py`'s
      original hardcoded list would fail the `if a_id and b_id` check.
-  3. Every accepted edge is tagged `extracted_by="llm"` (vs. the old
-     `doc_source="SCENARIO.md Sec 5b"` for human-curated edges) so a
-     reasoning/reporting layer can treat LLM-derived topology as needing
-     review rather than presenting it with the same confidence as a
-     verified fact -- same pattern as `resolution.py`'s `low_signal` flag.
+  3. Every accepted edge is tagged `extracted_by="<model name>"` (e.g.
+     "databricks-claude-opus-4-8", vs. the old `doc_source="SCENARIO.md
+     Sec 5b"` for human-curated edges) so a reasoning/reporting layer can
+     treat LLM-derived topology as needing review rather than presenting
+     it with the same confidence as a verified fact -- same pattern as
+     `resolution.py`'s `low_signal` flag.
 """
 from __future__ import annotations
 

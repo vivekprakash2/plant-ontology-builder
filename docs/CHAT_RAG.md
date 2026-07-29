@@ -36,6 +36,12 @@ flowchart TD
 
 This means the demo/system always answers something, and the UI never shows a raw stack trace.
 
+**Streaming counterpart:** `stream_answer(question, entities, kg)` is the live-events version `/api/chat`
+actually calls (see §3) -- same fallback discipline (agentic first, deterministic on any failure), but
+yields `_run_agentic_events()`'s plan/tool_call/tool_result events as they happen instead of only returning
+once at the end. `answer_question()` above still exists as the non-streaming form (drains the same generator
+and returns just the final answer) for any caller that doesn't need live events.
+
 ### 1a. Deterministic fallback (`_dispatch`)
 
 Rule-based, **not** an LLM — built to answer the exact scenarios in `docs/TEAM_HANDBOOK.md` Sec 7, but also
@@ -82,7 +88,7 @@ Key per-handler details worth knowing:
   "current" date baked into the sample data, and all "N hours/days ago" phrasing must be computed against
   it, not wall-clock time.
 
-### 1b. Agentic mode (`_run_agentic`)
+### 1b. Agentic mode (`_run_agentic` / `_run_agentic_events`)
 
 The LLM is given **read-only tools** to query the knowledge graph itself, rather than being handed a
 pre-baked answer to polish. This is the "expose the graph via tools, build an agent that reasons" pattern
@@ -92,6 +98,7 @@ pre-baked answer to polish. This is the "expose the graph via tools, build an ag
 
 | Tool | Purpose | Notes |
 |---|---|---|
+| `write_plan` | Write/update a step-by-step investigation plan (list of `{text, status}`), shown live to the user as a checklist | UI-only — doesn't query the graph. The system prompt instructs the model to call this FIRST, then again whenever a step's status changes. Handled inline in the loop (not via `_TOOL_EXECUTORS`) since it just updates `plan_steps`, not the KG |
 | `list_assets` | Every physical asset, canonical name, per-system IDs | Model calls this first if it doesn't know the exact `unified_id` |
 | `get_asset_context` | All alarms/alarm-point configuration/work orders/operator actions/health events/cost postings/historian tags connected to one asset | Wraps `KnowledgeGraph.context_for_asset`; adds a human `time_ago` string per record. Includes `AlarmConfig` records (configured HH/H/L/LL limits + deadband, see §6) alongside `AlarmEvent` |
 | `get_historian_trend` | Direction + %change of one tag over a window (never raw rows) | Wraps `_trend()`; caller picks `window_hours` (short for vibration, long for fouling) |
@@ -103,21 +110,29 @@ pre-baked answer to polish. This is the "expose the graph via tools, build an ag
 priority fallback after `get_asset_context`/`get_related_assets`) and `_flatten_evidence()` (so their matches
 show up as ordinary evidence cards/timeline entries) — see §3.
 
-**Loop** (`_run_agentic`, max `_MAX_AGENT_TURNS = 6` turns):
-1. Seed `messages` with `_AGENT_SYSTEM_PROMPT` (rules: always use tools before answering, never invent
-   facts/IDs/numbers, cite specific evidence, consider upstream/downstream assets, use short/long historian
-   windows appropriately, say so explicitly if evidence is inconclusive) + the user's question.
+**Loop** (`_run_agentic_events`, a generator; `_run_agentic` just drains it for the non-streaming form; max
+`_MAX_AGENT_TURNS = 7` turns — raised from 6 when `write_plan` was added, since a mandatory first plan call
+now uses part of the budget):
+1. Seed `messages` with `_AGENT_SYSTEM_PROMPT` (rules: call `write_plan` first and keep it updated, always
+   use tools before answering, never invent facts/IDs/numbers, cite specific evidence, consider
+   upstream/downstream assets, use short/long historian windows appropriately, say so explicitly if evidence
+   is inconclusive) + the user's question.
 2. Call `provider.chat(messages, tools=TOOL_SCHEMAS, max_tokens=1600)`.
-3. If the response has `tool_calls`, execute each via `_TOOL_EXECUTORS`, append the result as a `"role":
-   "tool"` message (via `_trend_result_for_llm()`, which **strips the `points` array** — the chart-only
+3. For each `tool_call` in the response: if it's `write_plan`, normalize+store the steps
+   (`_normalize_plan_steps`) and `yield {"type": "plan", "steps": [...]}` — no KG query, no walk step.
+   Otherwise, `yield {"type": "tool_call", "tool", "arguments", "label"}` (a human-readable "doing X" label
+   via `_tool_call_label()`) **before** executing, so a live UI can show "in progress" the moment the model
+   decides to look something up; then execute via `_TOOL_EXECUTORS`, append the result to `trace` +
+   `messages` (via `_trend_result_for_llm()`, which **strips the `points` array** — the chart-only
    per-minute downsampled series — before sending the trend result back to the model; the model only needs
-   summary stats, and the raw points would waste a large slice of the token budget for no reasoning benefit).
-   Every call + raw result is also appended to `trace` (kept in full, `points` included) for the UI's
-   evidence panel / chart data.
-4. If the response has no `tool_calls`, it's the final answer: parsed by `_split_agent_response()` into
-   `(headline, root_cause, recommendation)`.
-5. If the loop exhausts all turns without a final answer, returns a low-confidence "inconclusive within the
-   tool-call budget" answer (still includes the full `trace` as evidence).
+   summary stats, and the raw points would waste a large slice of the token budget for no reasoning benefit),
+   and `yield {"type": "tool_result", "tool", "walk_step"}` (`walk_step` from `_walk_step_for_tool_call()` —
+   see §3's graph-walk section — or `None` if this call touched no resolvable node).
+4. If a turn's response has no `tool_calls`, it's the final answer: parsed by `_split_agent_response()` into
+   `(headline, root_cause, recommendation)`, yielded as one final `{"type": "final", "answer": AgentAnswer,
+   "plan": [...]}` event.
+5. If the loop exhausts all turns without a final answer, yields a low-confidence "inconclusive within the
+   tool-call budget" final event (still includes the full `trace` as evidence).
 
 **Required 3-section Markdown output format** (enforced only by prompt instruction, not by a schema/grammar):
 ```
@@ -208,7 +223,7 @@ trigger lazily from a request-handling thread).
 | `/app.js`, `/style.css`, `/logo.svg` | GET | Static frontend assets |
 | `/api/suggestions` | GET | Returns the 7 demo questions from `docs/TEAM_HANDBOOK.md` Sec 7 (`SUGGESTED_QUESTIONS` constant) |
 | `/api/graph` | GET | Whole plant ontology (`KnowledgeGraph.to_node_link_json()`) for the persistent explorer panel (§4b) |
-| `/api/chat` | POST | `{"question": "..."}` → full answer + evidence + UI panel JSON |
+| `/api/chat` | POST | `{"question": "..."}` → `text/event-stream` of live plan/tool_call/tool_result events, ending with one `final` event carrying the full answer + evidence + UI panel JSON (same shape `/api/chat` always returned, before this was streamed) |
 
 **`/api/chat` request handling (input validation, OWASP-relevant):**
 - `Content-Length` must be present, `> 0`, and `<= MAX_BODY_BYTES` (4096) — rejects oversized/missing bodies
@@ -222,9 +237,11 @@ trigger lazily from a request-handling thread).
 - Responses set `X-Content-Type-Options: nosniff`. No secrets are ever included in a response — `evidence`/
   `panel`/`answer` are all derived from local CSV-sourced data or LLM output, never environment variables.
 
-**Response shape:**
+**Response shape** (the `final` SSE event's `data:` payload — see "Streaming (SSE)" below for the events
+that precede it):
 ```json
 {
+  "type": "final",
   "asset": "P-101" ,
   "scenario": "vibration" ,
   "answer": "...",
@@ -234,9 +251,38 @@ trigger lazily from a request-handling thread).
   "presented_by": "databricks-claude-opus-4-8",
   "confidence": "model-reasoned",
   "evidence": [ ... ],
-  "panel": { "entity": ..., "entity_id": "ASSET-002", "relationships": [...], "timeline": [...], "evidence": [...], "charts": [...] }
+  "panel": { "entity": ..., "entity_id": "ASSET-002", "relationships": [...], "timeline": [...], "evidence": [...], "charts": [...], "walk": [...] },
+  "plan": [ {"text": "...", "status": "done"}, ... ]
 }
 ```
+
+### Streaming (SSE) — `stream_answer()` → `/api/chat`
+
+`/api/chat` is a `text/event-stream` response, not a single JSON blob: `server.py`'s `do_POST` iterates
+`ontology_builder.agent.stream_answer(question, entities, kg)` and writes one `data: <json>\n\n` line per
+yielded event, flushing after each so the browser receives them as they happen (not buffered until the
+connection closes). Event shapes (see §1b for where each is yielded):
+
+| `type` | When | Payload |
+|---|---|---|
+| `plan` | Agentic mode calls `write_plan` | `{"steps": [{"text", "status"}, ...]}` |
+| `tool_call` | Right before a (non-plan) tool executes | `{"tool", "arguments", "label"}` — `label` is a human-readable "doing X" string |
+| `tool_result` | Right after a tool executes | `{"tool", "walk_step"}` — `walk_step` (`{"label", "node_ids"}` or `null`) is what the frontend uses for live graph-walk highlighting (§4b) |
+| `final` | Always exactly one, last | The full response shape above |
+
+Deterministic-fallback answers (no LLM configured, or the agentic loop failed) skip straight to a single
+`final` event — there's nothing to stream for an instant, non-tool-calling answer. `stream_answer()` never
+raises (same discipline as `answer_question()`); `server.py` sends response headers once up front (status
+can't change mid-stream) and catches `BrokenPipeError`/`ConnectionResetError` if the client navigates away
+mid-stream.
+
+**Frontend consumption** (`frontend/app.js`'s `submitQuestion()`): reads `res.body` via a `ReadableStream`
+reader (not `EventSource`, which doesn't support POST bodies), splits on `\n\n`, and dispatches each parsed
+event — `plan` re-renders the checklist (`renderPlanChecklist()`), `tool_call` appends a trace chip
+(`addTraceStep()`), `tool_result` marks it done and calls `liveWalkStep()` for live graph highlighting, and
+`final` renders the completed assistant bubble (`renderAssistantBubble()`) and settles the explorer —
+`focusAnswerInGraph()` if any live events occurred, or `animateGraphWalk()`'s post-hoc replay if the answer
+came from the deterministic fallback (which has no live events to show).
 
 ### `build_ui_panel()` — normalizing two different evidence shapes
 
@@ -258,6 +304,23 @@ Agentic evidence is a list of `{"type": "tool_call", "tool": ..., "arguments": .
 
 Returns `None` entirely if no asset could be resolved for the answer (e.g. the model never called
 `get_asset_context`/`get_related_assets`) — the frontend handles a `null` panel gracefully.
+
+### `build_graph_walk()` — the ordered node-visit sequence for the animated explorer replay
+
+A second, distinct pass over `answer.evidence` (not derived from the flattened/sorted `timeline`/`evidence`
+above) that preserves **call-level granularity and order**, for the frontend's `animateGraphWalk()` (§4b) to
+replay as a step-by-step highlight instead of one instant snapshot:
+- Agentic mode: one step per tool call, in the exact order the LLM made them. `_walk_step_for_tool_call()`
+  maps each tool's arguments/result to the real graph node ids it touched (e.g. `get_asset_context` → the
+  asset plus every attached record id it returned; `get_historian_trend` → the tag; `get_related_assets` →
+  the asset plus every related asset id; `search_evidence`/`get_plant_status_summary` → the matching record
+  ids). `list_assets` is skipped (it touches every asset — not a meaningful single step). A call that
+  touched no resolvable node (error/empty result) is also skipped.
+- Deterministic mode: one step per evidence item `_dispatch`'s handler gathered, in gathering order —
+  reuses `_describe_record()`'s `ref` extraction, same as `build_ui_panel()`'s `timeline`/`evidence` above.
+
+Always starts with a `{"label": "Start at <entity>", "node_ids": [entity_id]}` step. Returns `[]` if no
+asset was resolved (nothing to walk). Exposed as `panel.walk`.
 
 ---
 
@@ -351,10 +414,18 @@ run synchronously with no animation loop). Node categories mirror `ontology_buil
   auto-enables whatever category filters are needed so those nodes are actually visible, highlights them
   (`.highlighted` — red outline/glow) while dimming everything else (`.dimmed`), and pans the view to the
   resolved entity. This is what makes the explorer feel connected to "what the agent just reasoned about"
-  rather than being a static, disconnected diagram. **Known limitation** (logged in
-  `docs/EXTENDED_SCOPE.md`): this highlight only happens *after* the full answer arrives, not incrementally
-  as the agentic tool-calling loop runs — true "watch it think" live-updating would need streaming/SSE from
-  `/api/chat`, which doesn't exist yet.
+  rather than being a static, disconnected diagram. The manual "Focus in explorer" button still jumps
+  straight to this final state.
+- **Animated graph walk (`animateGraphWalk(panel)`)**: post-hoc replay fallback, used only when an answer
+  had no live events to show (the deterministic path, which has no tool calls). Replays `panel.walk` (§3's
+  `build_graph_walk()`) one step at a time (`WALK_STEP_DELAY_MS` = 550ms apart) — each step's node(s) pulse
+  blue (`.walk-current`) and the view pans to them, then fade to a dimmer blue trail (`.walk-visited`) as
+  the next step begins — before clearing the walk-only classes and settling into `focusAnswerInGraph()`'s
+  final red-highlighted state.
+- **Live graph walk (`liveWalkStep()`/`liveWalkFinish()`, new)**: for agentic answers, the explorer now
+  highlights nodes **as each tool call actually happens** — driven by real `tool_result` SSE events (§3),
+  not a replay. Same pulse/fade visual language as the replay version, just event-driven instead of
+  timer-driven. This closes the "watch it think while it's still thinking" gap noted below as resolved.
 - **Dark mode is still the default theme**, same inline head-script/`applyTheme()` mechanism as before the
   redesign — untouched by this change.
 
@@ -409,8 +480,8 @@ run synchronously with no animation loop). Node categories mirror `ontology_buil
   earlier design (`_polish_with_llm`) rewrote a deterministic draft into more natural prose via a plain
   `generate()` call; the current code path only produces `presented_by != "rule-based"` via the agentic tool-
   calling loop (`scenario == "agentic"`), which the frontend labels "🤖 reasoned by". If a non-agentic
-  polish-only mode is reintroduced, the frontend logic (`usedLlm`/badge text in `renderResult()`) already
-  supports it correctly — no frontend change needed, only backend wiring.
+  polish-only mode is reintroduced, the frontend logic (`usedLlm`/badge text in `renderAssistantBubble()`)
+  already supports it correctly — no frontend change needed, only backend wiring.
 
 ---
 
@@ -467,23 +538,23 @@ change.
 
 Not blocking for the current rubric, but relevant if this session extends the chat surface further:
 
-- **No content/text search over node properties** — retrieval is name/ID based only (`list_assets` +
-  keyword/exact matching in `_dispatch`, or the LLM's own reasoning over `get_asset_context` dumps in
-  agentic mode). There's no way to retrieve "which work orders mention a shim kit issue" without already
-  knowing which asset to look at. Fine at this dataset's scale (small enough to dump whole-context), won't
-  scale to a much larger plant.
-- **Fixed tool set of 4** (`list_assets`, `get_asset_context`, `get_historian_trend`, `get_related_assets`) —
-  `get_related_assets` only exposes `FEEDS`/`COOLS`/`SUPPLIES_UTILITY` edge types. No generic "find all
-  assets matching X" or "traverse N hops of any relationship type" tool exists yet.
-  New question patterns currently need either a new `_dispatch` branch (deterministic mode) or rely on the
-  LLM composing the existing 4 tools cleverly (agentic mode) — the latter is generally preferred per the
-  handbook's "AI should do the hard part" guidance.
+- **`search_evidence` is lexical substring search only** — it closes the old "no content search" gap, but
+  it is not semantic retrieval/embeddings and has no ranking beyond first-match scan order. At larger scale,
+  this should likely become indexed search (and possibly embeddings-backed retrieval) to improve recall and
+  relevance for paraphrased queries.
+- **Tool set is still intentionally narrow (6 tools):** `list_assets`, `get_asset_context`,
+  `get_historian_trend`, `get_related_assets`, `search_evidence`, `get_plant_status_summary`.
+  `get_related_assets` only exposes `FEEDS`/`COOLS`/`SUPPLIES_UTILITY` edges, and there is still no generic
+  "traverse N hops of any edge type" tool. New question patterns currently need either a new `_dispatch`
+  branch (deterministic mode) or rely on the LLM composing the current tools (agentic mode) — the latter
+  remains the preferred direction.
 - **`_dispatch`'s `_ALIASES` table is hand-maintained** — a new physical asset needs a manual alias entry to
   be reachable via the deterministic fallback; the agentic path already handles new assets/systems with zero
   code changes (via `list_assets`) once they're in the graph. Low priority since the LLM path is preferred.
 - **No streaming/SSE responses** — `/api/chat` is a single blocking POST; agentic answers can take
-  30-90+ seconds (multiple sequential tool-call round trips to a large model), during which the UI just
-  shows "Analyzing...". A streaming response would improve perceived latency but wasn't implemented.
+  30-90+ seconds (multiple sequential tool-call round trips to a large model), during which the UI shows a
+  pending assistant bubble ("Thinking..."). A streaming response would still improve perceived latency but
+  wasn't implemented.
 - **No formal prompt-injection hardening** (see §5) — acceptable for a local single-user demo, flagged for
   any future multi-user/external exposure.
 - **No MCP (Model Context Protocol) wrapping** — the tool-calling design already matches MCP's shape
