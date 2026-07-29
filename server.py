@@ -55,6 +55,8 @@ _STATIC_FILES = {
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/logo.svg": ("logo.svg", "image/svg+xml"),
+    "/logo.png": ("logo.png", "image/png"),
+    "/favicon.ico": ("logo.png", "image/png"),
 }
 
 SUGGESTED_QUESTIONS = [

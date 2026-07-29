@@ -128,9 +128,9 @@ body {
 
 .app-shell {
   position: relative;
-  padding: 1.2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 .app-header {
@@ -138,7 +138,10 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1rem;
+  flex: none;
+  padding: 0.85rem 1.2rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
   animation: rise-in 600ms ease-out;
 }
 
@@ -149,11 +152,12 @@ body {
 }
 
 .brand-logo {
-  width: clamp(120px, 16vw, 180px);
-  height: auto;
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
   background: #fff;
-  border-radius: 8px;
-  padding: 0.28rem 0.45rem;
+  border-radius: 10px;
+  padding: 0.2rem;
   border: 1px solid rgba(225, 37, 27, 0.22);
 }
 
@@ -169,16 +173,6 @@ body {
 h1 {
   margin: 0.15rem 0 0;
   font-size: clamp(1.5rem, 2.8vw, 2.3rem);
-}
-
-.status-pill {
-  font-family: "IBM Plex Mono", monospace;
-  color: #ffffff;
-  background: linear-gradient(120deg, var(--accent-red), var(--accent-red-deep));
-  border-radius: 999px;
-  padding: 0.42rem 0.85rem;
-  font-size: 0.8rem;
-  white-space: nowrap;
 }
 
 .header-actions {
@@ -207,19 +201,91 @@ h1 {
 }
 
 .workspace {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(360px, 1.05fr) minmax(360px, 0.95fr);
-  height: calc(100vh - 130px);
-  min-height: 520px;
+  display: flex;
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
 }
 
-.card {
-  background: var(--panel);
-  border: 1px solid var(--border);
+.panel-splitter {
+  flex: 0 0 10px;
+  margin: 0 0.4rem;
+  position: relative;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-splitter::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--border);
+  border-radius: 2px;
+  transition: background-color 120ms ease;
+}
+
+.panel-splitter:hover::before,
+.panel-splitter.dragging::before {
+  background: var(--accent-red);
+}
+
+.collapse-toggle {
+  position: relative;
+  z-index: 2;
+  width: 20px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: var(--shadow);
-  border-radius: 14px;
-  padding: 1rem;
+}
+
+.collapse-toggle:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+/* Collapsed: explorer panel hides entirely, chat fills the width, and the
+   splitter becomes a slim reopen tab pinned to the right edge -- same
+   pattern as a collapsible canvas/artifact panel. */
+.workspace.collapsed .explorer-panel {
+  display: none;
+}
+
+.workspace.collapsed .chat-panel {
+  flex: 1 1 100%;
+}
+
+.workspace.collapsed .panel-splitter {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  flex: none;
+}
+
+.workspace.collapsed .panel-splitter::before {
+  display: none;
+}
+
+.workspace.collapsed .collapse-toggle {
+  height: 64px;
+  border-radius: 8px 0 0 8px;
+  border-right: none;
 }
 
 .chat-panel {
@@ -228,6 +294,9 @@ h1 {
   gap: 0.7rem;
   animation: rise-in 650ms ease-out;
   min-height: 0;
+  flex: 0 0 45%;
+  min-width: 320px;
+  padding: 1rem 1rem 1rem 1.2rem;
 }
 
 .chat-thread {
@@ -253,8 +322,6 @@ h1 {
 
 .chat-bubble {
   max-width: 92%;
-  border-radius: 12px;
-  padding: 0.7rem 0.85rem;
   margin: 0;
 }
 
@@ -262,103 +329,45 @@ h1 {
   background: linear-gradient(130deg, var(--accent-red), var(--accent-red-deep));
   color: #ffffff;
   font-weight: 500;
+  border-radius: 14px 14px 2px 14px;
+  padding: 0.6rem 0.9rem;
 }
 
 .assistant-bubble {
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
   width: 100%;
+  border-left: 2px solid var(--accent-red);
+  padding-left: 0.85rem;
 }
 
 .assistant-bubble.pending .thinking {
   animation: pulse-fade 1.2s ease-in-out infinite;
 }
 
-/* Live plan checklist (agent.py's write_plan tool) -- populated/replaced
-   wholesale on every "plan" SSE event. Empty (no plan yet, or the
-   deterministic fallback path which never calls write_plan) collapses to
-   nothing via :empty rather than showing a blank list. */
-.plan-checklist {
-  list-style: none;
-  margin: 0.6rem 0 0;
-  padding: 0;
+.agent-id {
   display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.plan-checklist:empty {
-  display: none;
-}
-
-.plan-step {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.plan-step-icon {
-  flex: none;
-  width: 1.1em;
-  text-align: center;
-}
-
-.plan-step-in_progress {
-  color: var(--text-main);
-  font-weight: 600;
-}
-
-.plan-step-in_progress .plan-step-icon {
-  color: var(--accent-blue);
-  animation: pulse-fade 1s ease-in-out infinite;
-}
-
-.plan-step-done {
-  text-decoration: line-through;
-  opacity: 0.7;
-}
-
-.plan-step-done .plan-step-icon {
-  color: var(--accent-green);
-}
-
-/* Live tool-call trace -- one chip per "tool_call" SSE event, appended in
-   real time (the coding-agent-style "thinking / using a tool" feed),
-   marked done once its matching "tool_result" arrives. Mirrors
-   design_mockups/chat_graph_concept.html's .trace chip styling. */
-.trace {
-  display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
-  margin: 0.6rem 0 0;
+  margin-bottom: 0.4rem;
 }
 
-.trace:empty {
-  display: none;
-}
-
-.trace-step {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+.agent-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--accent-red);
+  color: #fff;
   font-size: 0.72rem;
-  color: var(--text-muted);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  padding: 0.15rem 0.45rem;
-  background: var(--surface);
-}
-
-.trace-step.active {
-  color: #08131f;
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
   font-weight: 700;
-  animation: pulse-fade 1s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 
-.trace-step.done {
-  color: var(--text-muted);
+.agent-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .assistant-headline-row {
@@ -791,17 +800,49 @@ textarea:focus-visible {
 .explorer-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0;
   animation: rise-in 700ms ease-out;
   min-height: 0;
+  flex: 1 1 auto;
+  min-width: 340px;
+  padding: 0;
 }
 
-.explorer-header h2 {
-  font-size: 1.05rem;
+.explorer-header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 1.2rem 0.7rem 0.9rem;
+  flex: none;
+}
+
+.explorer-tabs {
+  display: inline-flex;
+  gap: 3px;
+  background: var(--bg-2);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.explorer-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.explorer-tab.active {
+  background: var(--chip-active-bg);
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+  font-weight: 700;
 }
 
 .explorer-header .muted {
-  margin-top: 0.15rem;
+  margin-top: 0.4rem;
 }
 
 .explorer-controls {
@@ -810,6 +851,10 @@ textarea:focus-visible {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  flex: none;
+  padding: 0.55rem 1.2rem 0.55rem 0.9rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
 }
 
 .focus-group {
@@ -834,39 +879,219 @@ textarea:focus-visible {
   color: var(--chip-active-text);
 }
 
-.zoom-group {
-  display: inline-flex;
-  border: 1px solid var(--chip-border);
-  border-radius: 8px;
-  overflow: hidden;
+.zoom-stack {
+  position: absolute;
+  left: 0.8rem;
+  bottom: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  z-index: 4;
 }
 
 .zoom-btn {
-  border: 0;
-  background: var(--chip-bg);
-  padding: 0.3rem 0.62rem;
+  border: 1px solid var(--chip-border);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 0.3rem 0;
+  width: 2.2rem;
   font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
   color: var(--text-main);
   cursor: pointer;
-}
-
-.zoom-btn + .zoom-btn {
-  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
 
 .zoom-btn:hover {
-  background: var(--surface-alt);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.graph-legend {
+  position: absolute;
+  left: 3.2rem;
+  right: 0.8rem;
+  bottom: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  box-shadow: var(--shadow);
+  z-index: 4;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.legend-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-line {
+  width: 14px;
+  height: 2px;
+  display: inline-block;
+}
+
+/* Reasoning trace -- floating panel, top-right of the graph viewport.
+   Narrates the walk in plain language as it happens (fed from the same
+   plan/tool_call/tool_result SSE events as the chat's own trace chips),
+   and stays replayable afterwards via play/step/reset -- reusing the exact
+   same build_graph_walk() steps that already drive the automatic
+   highlight, just under manual control this time. */
+.reasoning-trace {
+  position: absolute;
+  right: 0.8rem;
+  top: 0.8rem;
+  width: 230px;
+  max-width: calc(100% - 1.6rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+}
+
+.reasoning-trace .log-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.3rem 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-main);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.reasoning-trace .log-head .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  animation: pulse-fade 1.2s ease-in-out infinite;
+}
+
+.reasoning-trace .spacer {
+  flex: 1;
+}
+
+.log-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--chip-border);
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.log-btn:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  background: var(--chip-active-bg);
+}
+
+.log-btn.playing {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+}
+
+.log-btn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.log-btn[data-tip]:hover::after {
+  opacity: 1;
+}
+
+.reasoning-trace .log-body {
+  max-height: 150px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 0.65rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+.log-entry {
+  margin-bottom: 0.3rem;
+}
+
+.log-entry-n {
+  color: var(--text-main);
+  opacity: 0.5;
+  margin-right: 4px;
+}
+
+.log-entry.latest {
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.log-entry.final {
+  color: var(--accent-red);
+  font-weight: 600;
 }
 
 .graph-viewport {
-  border: 1px solid var(--border);
-  border-radius: 12px;
   background: linear-gradient(180deg, var(--graph-bg-1) 0%, var(--graph-bg-2) 100%);
   flex: 1;
   min-height: 260px;
   overflow: hidden;
   position: relative;
   cursor: grab;
+}
+
+.graph-view {
+  display: none;
+  width: 100%;
+  height: 100%;
+}
+
+.graph-view.active {
+  display: block;
 }
 
 .graph-viewport.grabbing {
@@ -880,12 +1105,49 @@ textarea:focus-visible {
   transform-origin: 0 0;
 }
 
+/* Ontology Overview -- a small, always-bounded schema/type-level diagram
+   (one node per record type + a live count), unlike the Reasoning Walk's
+   per-instance nodes. Answers "why isn't the whole graph shown at once":
+   with 126+ AlarmEvent instances alone, showing every record would be a
+   hairball -- this view is bounded at 8 type-nodes no matter how much data
+   is behind each one. */
+.overview-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.overview-edge {
+  stroke: var(--edge-color);
+  stroke-width: 1.3px;
+  fill: none;
+}
+
+.overview-node circle {
+  fill: var(--node-bg);
+  stroke-width: 2px;
+  cursor: pointer;
+}
+
+.overview-node text.overview-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  text-anchor: middle;
+  font-family: inherit;
+}
+
+.overview-node text.overview-count {
+  fill: var(--text-main);
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
 .graph-edge {
-  position: absolute;
-  height: 1.5px;
-  background: var(--edge-color);
-  transform-origin: left center;
-  opacity: 0.8;
+  stroke: var(--edge-color);
+  stroke-width: 1.4px;
+  fill: none;
+  opacity: 0.85;
 }
 
 .graph-edge.hidden-node {
@@ -897,27 +1159,36 @@ textarea:focus-visible {
 }
 
 .graph-edge.highlighted {
-  background: var(--accent-red);
-  height: 2.5px;
+  stroke: var(--accent-red);
+  stroke-width: 2.4px;
   opacity: 1;
 }
 
+/* Traditional node-and-edge look: a plain colored circle per node (radius/
+   color set per record type in JS), with its label always shown beneath it
+   -- no boxes/cards. Edge relation types are never shown by default, only
+   via the native hover tooltip (an SVG <title> child on each line). */
 .node {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.35rem 0.5rem;
-  background: var(--node-bg);
-  min-width: 90px;
-  max-width: 170px;
-  position: absolute;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 6px 14px rgba(16, 18, 20, 0.08);
   cursor: pointer;
-  transition: box-shadow 150ms ease, opacity 150ms ease, border-color 150ms ease;
 }
 
-.node:hover {
-  box-shadow: 0 10px 20px rgba(16, 18, 20, 0.14);
+.node .node-circle {
+  fill: var(--node-bg);
+  stroke-width: 2px;
+  transition: opacity 150ms ease, stroke-width 150ms ease;
+}
+
+.node .node-ring {
+  fill: none;
+  stroke: none;
+}
+
+.node .node-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  text-anchor: middle;
+  font-family: inherit;
+  pointer-events: none;
 }
 
 .node.hidden-node {
@@ -928,18 +1199,21 @@ textarea:focus-visible {
   opacity: 0.18;
 }
 
-.node.highlighted {
-  opacity: 1;
-  border-width: 2px;
-  border-color: var(--accent-red);
-  box-shadow: 0 0 0 3px rgba(225, 37, 27, 0.18);
-  z-index: 5;
+.node.highlighted .node-circle {
+  stroke: var(--accent-red);
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 3px rgba(225, 37, 27, 0.5));
 }
 
-.node.selected {
-  border-width: 2px;
-  border-color: var(--accent-black);
-  z-index: 6;
+.node.highlighted .node-label {
+  fill: var(--text-main);
+  font-weight: 700;
+}
+
+.node.selected .node-circle {
+  stroke: var(--accent-black);
+  stroke-width: 3px;
+  stroke-dasharray: 3 2;
 }
 
 /* Graph-walk animation (see agent.py's build_graph_walk() +
@@ -949,87 +1223,50 @@ textarea:focus-visible {
    the "walk" is on right now (pulsing, distinct blue so it doesn't get
    confused with the red .highlighted end-state); .walk-visited is the
    fading trail of steps already passed through. */
-.node.walk-visited {
-  opacity: 1;
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 2px rgba(39, 125, 161, 0.16);
+.node.walk-visited .node-circle {
+  stroke: var(--accent-blue);
+  stroke-width: 2.5px;
 }
 
-.node.walk-current {
-  opacity: 1;
-  border-width: 2px;
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 5px rgba(39, 125, 161, 0.3);
-  z-index: 7;
-  animation: pulse-fade 700ms ease-in-out infinite;
+.node.walk-current .node-circle {
+  stroke: var(--accent-blue);
+  stroke-width: 3px;
+}
+
+.node.walk-current .node-ring {
+  stroke: var(--accent-blue);
+  stroke-width: 2px;
+  animation: node-pulse 1.3s ease-out infinite;
+}
+
+@keyframes node-pulse {
+  0% {
+    r: 14;
+    opacity: 0.9;
+  }
+  100% {
+    r: 28;
+    opacity: 0;
+  }
 }
 
 .graph-edge.walk-visited {
-  background: var(--accent-blue);
+  stroke: var(--accent-blue);
   opacity: 0.5;
 }
 
 .graph-edge.walk-current {
-  background: var(--accent-blue);
-  height: 2.5px;
+  stroke: var(--accent-blue);
+  stroke-width: 2.4px;
   opacity: 1;
+  stroke-dasharray: 6 5;
+  animation: dash-marching 1s linear infinite;
 }
 
-/* Node category colors -- mirrors ontology_builder/viz.py's palette so the
-   explorer visually matches the standalone graph.html export. */
-.node-asset {
-  border-color: #f9c74f;
-  background: var(--node-main-bg);
-  min-width: 120px;
-  font-weight: 600;
-}
-
-.node-alarm {
-  border-color: #f94144;
-}
-
-.node-workorder {
-  border-color: #577590;
-}
-
-.node-operatoraction {
-  border-color: #f8961e;
-}
-
-.node-healthevent {
-  border-color: #9b5de5;
-}
-
-.node-costposting {
-  border-color: #43aa8b;
-}
-
-.node-historiantag {
-  border-color: #adb5bd;
-}
-
-.node-other {
-  border-color: #858f9c;
-}
-
-.node-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.node-asset .node-title {
-  font-size: 0.82rem;
-}
-
-.node-meta {
-  margin-top: 0.2rem;
-  color: var(--text-muted);
-  font-size: 0.66rem;
-  font-family: "IBM Plex Mono", monospace;
+@keyframes dash-marching {
+  to {
+    stroke-dashoffset: -22;
+  }
 }
 
 .graph-hint {
@@ -1037,12 +1274,31 @@ textarea:focus-visible {
   font-size: 0.8rem;
 }
 
+/* Node inspector -- floating overlay, bottom-left of the graph viewport,
+   stacked above the zoom stack + legend bar (matches the mockup: the
+   canvas fills the entire panel edge-to-edge, with the inspector/zoom/
+   legend all floating on top of it rather than taking their own layout
+   row). */
 .inspector {
-  border-top: 1px solid var(--divider);
-  padding-top: 0.6rem;
-  max-height: 200px;
+  display: none;
+  position: absolute;
+  left: 0.8rem;
+  bottom: 8.2rem;
+  width: 230px;
+  max-width: calc(100% - 1.6rem);
+  max-height: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 0.6rem 0.85rem;
   overflow-y: auto;
   font-size: 0.85rem;
+  z-index: 5;
+}
+
+.inspector.show {
+  display: block;
 }
 
 .inspector-title {
@@ -1118,13 +1374,19 @@ textarea:focus-visible {
   }
 
   .workspace {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     height: auto;
+  }
+
+  .panel-splitter {
+    display: none;
   }
 
   .chat-panel,
   .explorer-panel {
+    flex-basis: auto !important;
     height: 70vh;
+    width: 100%;
   }
 }
 

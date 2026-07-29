@@ -12,9 +12,19 @@ const chatThread = document.getElementById("chatThread");
 const suggestionRow = document.getElementById("suggestionRow");
 const customQuestion = document.getElementById("customQuestion");
 const runButton = document.getElementById("runButton");
-const statusPill = document.getElementById("statusPill");
 const themeToggle = document.getElementById("themeToggle");
 
+const workspace = document.getElementById("workspace");
+const chatPanel = document.getElementById("chatPanel");
+const panelSplitter = document.getElementById("panelSplitter");
+const collapseToggle = document.getElementById("collapseToggle");
+
+const explorerPanel = document.getElementById("explorerPanel");
+const tabOverview = document.getElementById("tabOverview");
+const tabWalk = document.getElementById("tabWalk");
+const viewOverview = document.getElementById("viewOverview");
+const viewWalk = document.getElementById("viewWalk");
+const explorerControls = document.getElementById("explorerControls");
 const graphViewport = document.getElementById("graphViewport");
 const plantGraph = document.getElementById("plantGraph");
 const graphFilterGroup = document.getElementById("graphFilterGroup");
@@ -23,6 +33,90 @@ const explorerHint = document.getElementById("explorerHint");
 const zoomInBtn = document.getElementById("zoomInBtn");
 const zoomOutBtn = document.getElementById("zoomOutBtn");
 const zoomResetBtn = document.getElementById("zoomResetBtn");
+
+const reasoningTrace = document.getElementById("reasoningTrace");
+const traceLogBody = document.getElementById("traceLogBody");
+const tracePlayBtn = document.getElementById("tracePlayBtn");
+const traceStepBtn = document.getElementById("traceStepBtn");
+const traceResetBtn = document.getElementById("traceResetBtn");
+
+// --- Drag-to-resize the chat/graph split + collapse-to-right ---------------
+// Same pattern as a collapsible canvas/artifact panel: drag the splitter to
+// resize, or click its handle to fully hide the explorer panel (chat fills
+// the width); the handle becomes a slim reopen tab pinned to the right edge.
+const MIN_CHAT_PCT = 25;
+const MAX_CHAT_PCT = 70;
+let panelResizing = false;
+
+panelSplitter.addEventListener("mousedown", (e) => {
+  if (workspace.classList.contains("collapsed")) return; // acts as the reopen tab instead
+  if (e.target.closest("#collapseToggle")) return; // clicking the handle collapses, doesn't resize
+  panelResizing = true;
+  panelSplitter.classList.add("dragging");
+  document.body.style.userSelect = "none";
+  e.preventDefault();
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!panelResizing) return;
+  const rect = workspace.getBoundingClientRect();
+  let pct = ((e.clientX - rect.left) / rect.width) * 100;
+  pct = Math.min(MAX_CHAT_PCT, Math.max(MIN_CHAT_PCT, pct));
+  chatPanel.style.flexBasis = `${pct}%`;
+});
+
+window.addEventListener("mouseup", () => {
+  if (!panelResizing) return;
+  panelResizing = false;
+  panelSplitter.classList.remove("dragging");
+  document.body.style.userSelect = "";
+});
+
+collapseToggle.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const collapsed = workspace.classList.toggle("collapsed");
+  collapseToggle.textContent = collapsed ? "‹" : "›";
+  collapseToggle.title = collapsed ? "Expand graph panel" : "Collapse graph panel";
+  collapseToggle.setAttribute("aria-label", collapseToggle.title);
+});
+panelSplitter.addEventListener("click", () => {
+  if (workspace.classList.contains("collapsed")) collapseToggle.click();
+});
+
+// --- Ontology Overview / Reasoning Walk tabs -------------------------------
+// While scoped to an answer, the category filter chips stay hidden and the
+// hint reports the scoped node count -- see graphState.scopedToAnswer.
+function applyWalkUiState() {
+  if (graphState.scopedToAnswer) {
+    explorerControls.style.display = "none";
+    explorerHint.textContent = `Showing ${graphState.scopedCount} of ${graphState.nodes.length} nodes (scoped to this answer).`;
+  } else {
+    explorerControls.style.display = "flex";
+    explorerHint.textContent = "Browse the unified knowledge graph directly, or ask a question to see it come alive.";
+  }
+}
+
+function showOverviewTab() {
+  tabOverview.classList.add("active");
+  tabWalk.classList.remove("active");
+  viewOverview.classList.add("active");
+  viewWalk.classList.remove("active");
+  explorerControls.style.display = "none";
+  document.getElementById("zoomStack").style.display = "none";
+  reasoningTrace.style.display = "none"; // only relevant to a graph walk, not the static schema view
+  explorerHint.textContent = "Always fully visible -- bounded at one node per record type, no matter how much data is behind each one.";
+}
+function showWalkTab() {
+  tabOverview.classList.remove("active");
+  tabWalk.classList.add("active");
+  viewOverview.classList.remove("active");
+  viewWalk.classList.add("active");
+  document.getElementById("zoomStack").style.display = "flex";
+  reasoningTrace.style.display = "flex";
+  applyWalkUiState();
+}
+tabOverview.addEventListener("click", showOverviewTab);
+tabWalk.addEventListener("click", showWalkTab);
 
 // --- Dark mode (default) with a manual toggle, persisted in localStorage ---
 // The actual theme attribute is already set by an inline script in
@@ -351,23 +445,26 @@ function addPendingAssistantBubble() {
   turn.className = "chat-turn chat-turn-assistant";
   const card = document.createElement("div");
   card.className = "chat-bubble assistant-bubble pending";
+
+  const agentId = document.createElement("div");
+  agentId.className = "agent-id";
+  const avatar = document.createElement("span");
+  avatar.className = "agent-avatar";
+  avatar.textContent = "E";
+  const agentName = document.createElement("span");
+  agentName.className = "agent-name";
+  agentName.textContent = "Ellie";
+  agentId.appendChild(avatar);
+  agentId.appendChild(agentName);
+  card.appendChild(agentId);
+
+  // Kept deliberately minimal -- the live step-by-step reasoning (plan +
+  // tool-call trace) is shown once, in the Reasoning trace panel on the
+  // graph side, not duplicated here too.
   const p = document.createElement("p");
   p.className = "muted thinking";
-  p.textContent = "Thinking...";
+  p.textContent = "Thinking... (see the Reasoning trace panel on the right)";
   card.appendChild(p);
-
-  // Populated live as SSE events arrive (see submitQuestion) -- a checklist
-  // of the agent's write_plan steps, and a running breadcrumb trace of
-  // tool calls as they happen, in the style of a coding agent's activity
-  // feed. Both stay empty (and invisible via :empty) for the deterministic
-  // fallback path, which has no intermediate steps to show.
-  const plan = document.createElement("ul");
-  plan.className = "plan-checklist";
-  card.appendChild(plan);
-
-  const trace = document.createElement("div");
-  trace.className = "trace";
-  card.appendChild(trace);
 
   turn.appendChild(card);
   chatThread.appendChild(turn);
@@ -375,48 +472,21 @@ function addPendingAssistantBubble() {
   return turn;
 }
 
-const PLAN_STATUS_ICON = { pending: "○", in_progress: "◐", done: "●" };
-
-// Renders the agent's live write_plan() steps as a checklist (replaced
-// wholesale on every "plan" event -- the model may reorder/add/remove
-// steps, not just flip a status, so a full re-render is simpler and safer
-// than diffing).
-function renderPlanChecklist(container, steps) {
-  container.innerHTML = "";
-  (steps || []).forEach((step) => {
-    const li = document.createElement("li");
-    li.className = `plan-step plan-step-${step.status}`;
-    const icon = document.createElement("span");
-    icon.className = "plan-step-icon";
-    icon.textContent = PLAN_STATUS_ICON[step.status] || PLAN_STATUS_ICON.pending;
-    const text = document.createElement("span");
-    text.textContent = step.text;
-    li.appendChild(icon);
-    li.appendChild(text);
-    container.appendChild(li);
-  });
-}
-
-// One breadcrumb chip per tool call, appended live as "tool_call" events
-// arrive and marked done once the matching "tool_result" arrives -- the
-// coding-agent-style "thinking / using a tool" activity feed.
-function addTraceStep(container, label) {
-  const chip = document.createElement("span");
-  chip.className = "trace-step active";
-  chip.textContent = label;
-  container.appendChild(chip);
-  return chip;
-}
-
-function markTraceStepDone(chip) {
-  if (!chip) return;
-  chip.classList.remove("active");
-  chip.classList.add("done");
-}
-
 function renderAssistantBubble(turnEl, data) {
   const card = document.createElement("div");
   card.className = "chat-bubble assistant-bubble";
+
+  const agentId = document.createElement("div");
+  agentId.className = "agent-id";
+  const avatar = document.createElement("span");
+  avatar.className = "agent-avatar";
+  avatar.textContent = "E";
+  const agentName = document.createElement("span");
+  agentName.className = "agent-name";
+  agentName.textContent = "Ellie";
+  agentId.appendChild(avatar);
+  agentId.appendChild(agentName);
+  card.appendChild(agentId);
 
   const usedLlm = data.presented_by && data.presented_by !== "rule-based";
   const badgeText = usedLlm
@@ -536,15 +606,15 @@ async function submitQuestion(question) {
   const pendingTurn = addPendingAssistantBubble();
   const card = pendingTurn.querySelector(".assistant-bubble");
   const thinkingEl = card.querySelector(".thinking");
-  const planEl = card.querySelector(".plan-checklist");
-  const traceEl = card.querySelector(".trace");
 
   // Reset any highlighting left over from a previous answer before this
   // one's live events (if any) start arriving.
   clearHighlight();
   liveWalkReset();
+  stopReplay();
+  replayIndex = -1;
+  resetTraceLog();
   let sawLiveEvent = false;
-  let activeChip = null;
 
   try {
     const res = await fetch("/api/chat", {
@@ -593,6 +663,13 @@ async function submitQuestion(question) {
 
         if (event.type === "final") {
           renderAssistantBubble(pendingTurn, event);
+          // Keep this answer's panel + precomputed walk steps around so the
+          // reasoning-trace panel's play/step controls can replay them later,
+          // regardless of which path (live SSE or post-hoc) drove them the
+          // first time.
+          lastPanel = event.panel;
+          lastWalkSteps = (event.panel && event.panel.walk) || [];
+          replayIndex = lastWalkSteps.length; // already "played" once automatically below
           // If any live tool-call events arrived, the explorer was already
           // walked live (see liveWalkStep below) -- just settle into the
           // final highlighted state. Otherwise (deterministic fallback,
@@ -609,13 +686,8 @@ async function submitQuestion(question) {
         sawLiveEvent = true;
         thinkingEl.style.display = "none";
 
-        if (event.type === "plan") {
-          renderPlanChecklist(planEl, event.steps);
-        } else if (event.type === "tool_call") {
-          activeChip = addTraceStep(traceEl, event.label || event.tool);
-        } else if (event.type === "tool_result") {
-          markTraceStepDone(activeChip);
-          if (event.walk_step) liveWalkStep(event.walk_step);
+        if (event.type === "tool_result" && event.walk_step) {
+          liveWalkStep(event.walk_step);
         }
         scrollThreadToBottom();
       }
@@ -656,8 +728,8 @@ function renderSuggestions(questions) {
 fetch("/api/suggestions")
   .then((r) => r.json())
   .then((data) => renderSuggestions(data.questions || []))
-  .catch(() => {
-    statusPill.textContent = "Offline";
+  .catch((err) => {
+    console.error("Failed to load suggestions", err);
   });
 
 // Welcome message so the thread isn't empty on load.
@@ -666,11 +738,24 @@ fetch("/api/suggestions")
   turn.className = "chat-turn chat-turn-assistant";
   const card = document.createElement("div");
   card.className = "chat-bubble assistant-bubble";
+
+  const agentId = document.createElement("div");
+  agentId.className = "agent-id";
+  const avatar = document.createElement("span");
+  avatar.className = "agent-avatar";
+  avatar.textContent = "E";
+  const agentName = document.createElement("span");
+  agentName.className = "agent-name";
+  agentName.textContent = "Ellie";
+  agentId.appendChild(avatar);
+  agentId.appendChild(agentName);
+  card.appendChild(agentId);
+
   const p = document.createElement("p");
   p.textContent =
-    "Ask me anything about the plant -- a specific problem (\"why is P-101 vibrating?\"), " +
+    "Hi, I'm Ellie. Ask me anything about the plant -- a specific problem (\"why is P-101 vibrating?\"), " +
     "an open-ended look-around (\"show me everything on Unit 100\", \"what's alarming right now?\"), " +
-    "or browse the Plant Ontology Explorer on the right directly.";
+    "or browse the Ontology Overview / Reasoning Walk on the right directly.";
   card.appendChild(p);
   turn.appendChild(card);
   chatThread.appendChild(turn);
@@ -688,14 +773,14 @@ fetch("/api/suggestions")
 // ===========================================================================
 
 const NODE_STYLE = {
-  Asset: { className: "node-asset", categoryLabel: "Assets" },
-  AlarmEvent: { className: "node-alarm", categoryLabel: "Alarms" },
-  AlarmConfig: { className: "node-alarm", categoryLabel: "Alarms" },
-  WorkOrder: { className: "node-workorder", categoryLabel: "Work Orders" },
-  OperatorAction: { className: "node-operatoraction", categoryLabel: "Operator Actions" },
-  HealthEvent: { className: "node-healthevent", categoryLabel: "Health Events" },
-  CostPosting: { className: "node-costposting", categoryLabel: "Cost Postings" },
-  HistorianTag: { className: "node-historiantag", categoryLabel: "Historian Tags" },
+  Asset: { categoryLabel: "Assets" },
+  AlarmEvent: { categoryLabel: "Alarms" },
+  AlarmConfig: { categoryLabel: "Alarms" },
+  WorkOrder: { categoryLabel: "Work Orders" },
+  OperatorAction: { categoryLabel: "Operator Actions" },
+  HealthEvent: { categoryLabel: "Health Events" },
+  CostPosting: { categoryLabel: "Cost Postings" },
+  HistorianTag: { categoryLabel: "Historian Tags" },
 };
 
 const ALWAYS_ON_CATEGORY = "Assets";
@@ -718,6 +803,16 @@ const graphState = {
   zoom: 1,
   pan: { x: 0, y: 0 },
   selectedId: null,
+  canvasWidth: 1200,
+  canvasHeight: 900,
+  // Whether the Reasoning Walk view is currently scoped to one answer's
+  // evidence (see focusAnswerInGraph) -- while scoped, the category filter
+  // chips are hidden (the graph is already showing exactly what matters
+  // for this answer, so "why would you filter it further" -- see
+  // docs/CHAT_AGENT.md's design notes on this) and the hint line reports
+  // how much of the whole graph is currently in view instead.
+  scopedToAnswer: false,
+  scopedCount: 0,
 };
 
 function categoryFor(label) {
@@ -838,7 +933,22 @@ function selectNode(nodeId) {
   node.el.classList.add("selected");
 }
 
+// Restores the inspector to whatever the "pinned" (clicked) node is, or
+// hides it entirely if nothing is pinned -- used when the mouse leaves a
+// node that was only being previewed on hover, not clicked. The inspector
+// is a hover popup: it should only be on screen while there's something to
+// show, never sitting empty with a placeholder hint.
+function resetInspectorToDefault() {
+  if (graphState.selectedId && graphState.nodesById.has(graphState.selectedId)) {
+    renderInspector(graphState.nodesById.get(graphState.selectedId));
+    return;
+  }
+  inspector.classList.remove("show");
+  inspector.innerHTML = "";
+}
+
 function renderInspector(node) {
+  inspector.classList.add("show");
   inspector.innerHTML = "";
   const title = document.createElement("p");
   title.className = "inspector-title";
@@ -912,6 +1022,121 @@ function panToNode(nodeId, { select = false } = {}) {
   if (select) selectNode(nodeId);
 }
 
+// Re-runs the force layout using ONLY the given node ids (instead of
+// relying on their positions from the full 162-node layout, where a small
+// handful of relevant nodes can end up clustered wherever the whole-graph
+// simulation happened to push them -- crowded/overlapping once everything
+// else is hidden). Spreads just this subgraph out to fill the viewport,
+// then updates each node's transform + every touched edge's curve so the
+// scoped view actually looks readable instead of a tangle.
+// Rotates + flattens an already force-laid-out node set so it reads as a
+// roughly horizontal, gently-upward-sloping trail (matching the mockup)
+// instead of the force layout's natural circular/blob spread: finds the
+// principal axis (via 2x2 covariance/PCA) of `pcaNodes` (the "backbone" --
+// defaults to every node being moved, but callers can pass just the Asset
+// nodes so a few thousand densely-clustered AlarmEvent points don't skew
+// the axis away from the backbone that's actually meant to read
+// horizontal), rotates that axis to horizontal plus a small upward tilt,
+// flattens the remaining vertical spread, then (optionally) re-fits
+// everything tightly into the layout box with padding.
+function orientSubgraphHorizontally(nodesToMove, layoutW, layoutH, options) {
+  const opts = options || {};
+  const pcaNodes = opts.pcaNodes && opts.pcaNodes.length >= 2 ? opts.pcaNodes : nodesToMove;
+  if (nodesToMove.length < 2 || pcaNodes.length < 2) return;
+  const flatten = opts.flatten ?? 0.62;
+  const tiltDegrees = opts.tiltDegrees ?? -7;
+  const refit = opts.refit ?? true;
+
+  const cx = pcaNodes.reduce((s, n) => s + n.x, 0) / pcaNodes.length;
+  const cy = pcaNodes.reduce((s, n) => s + n.y, 0) / pcaNodes.length;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  pcaNodes.forEach((n) => {
+    const dx = n.x - cx;
+    const dy = n.y - cy;
+    sxx += dx * dx;
+    syy += dy * dy;
+    sxy += dx * dy;
+  });
+  const principalAngle = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  const tiltUp = (tiltDegrees * Math.PI) / 180;
+  const rotate = -principalAngle + tiltUp;
+  const cos = Math.cos(rotate);
+  const sin = Math.sin(rotate);
+  nodesToMove.forEach((n) => {
+    const dx = n.x - cx;
+    const dy = n.y - cy;
+    n.x = dx * cos - dy * sin;
+    n.y = (dx * sin + dy * cos) * flatten;
+  });
+
+  if (!refit) {
+    // Just recenter in the layout box without forcing a tight
+    // bounding-box fit -- keeps the full graph's existing pan/zoom margin
+    // instead of stretching it to fill every pixel.
+    nodesToMove.forEach((n) => {
+      n.x += layoutW / 2;
+      n.y += layoutH / 2;
+    });
+    return;
+  }
+
+  const pad = 34;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  nodesToMove.forEach((n) => {
+    minX = Math.min(minX, n.x);
+    maxX = Math.max(maxX, n.x);
+    minY = Math.min(minY, n.y);
+    maxY = Math.max(maxY, n.y);
+  });
+  const spanX = Math.max(maxX - minX, 1);
+  const spanY = Math.max(maxY - minY, 1);
+  const scale = Math.min((layoutW - pad * 2) / spanX, (layoutH - pad * 2) / spanY, 1.4);
+  nodesToMove.forEach((n) => {
+    n.x = pad + (n.x - minX) * scale;
+    n.y = pad + (n.y - minY) * scale;
+  });
+}
+
+function layoutScopedSubgraph(nodeIds) {
+  const idSet = new Set(nodeIds);
+  const subNodes = graphState.nodes.filter((n) => idSet.has(n.id));
+  if (subNodes.length < 2) return;
+  const idxById = new Map(subNodes.map((n, i) => [n.id, i]));
+  const subEdges = graphState.edges
+    .filter((e) => idSet.has(e.source) && idSet.has(e.target))
+    .map((e) => ({ ...e, sourceIdx: idxById.get(e.source), targetIdx: idxById.get(e.target) }));
+
+  const viewportW = graphViewport.clientWidth || 760;
+  const viewportH = graphViewport.clientHeight || 420;
+  const layoutW = Math.max(viewportW * 0.85, 360);
+  const layoutH = Math.max(viewportH * 0.85, 280);
+  computeForceLayout(subNodes, subEdges, layoutW, layoutH);
+  orientSubgraphHorizontally(subNodes, layoutW, layoutH);
+
+  // Center the freshly-laid-out subgraph within the (much larger) shared
+  // canvas so panToNode's math still works unchanged.
+  const offsetX = (graphState.canvasWidth - layoutW) / 2;
+  const offsetY = (graphState.canvasHeight - layoutH) / 2;
+  subNodes.forEach((n) => {
+    n.x += offsetX;
+    n.y += offsetY;
+    n.el.setAttribute("transform", `translate(${n.x} ${n.y})`);
+  });
+
+  graphState.edges.forEach((edge) => {
+    if (idSet.has(edge.source) && idSet.has(edge.target)) {
+      const fromNode = graphState.nodesById.get(edge.source);
+      const toNode = graphState.nodesById.get(edge.target);
+      edge.el.setAttribute("d", curvedEdgePath(fromNode, toNode));
+    }
+  });
+}
+
 // Called from a chat answer's "Focus in explorer" action (also triggered
 // automatically once an answer renders): turns on whatever category filters
 // are needed to reveal the cited evidence, highlights the resolved entity +
@@ -920,6 +1145,7 @@ function panToNode(nodeId, { select = false } = {}) {
 // link between "the agent reasoned about this" and the always-visible graph.
 function focusAnswerInGraph(panel) {
   if (!panel || !panel.entity_id || !graphState.nodesById.has(panel.entity_id)) return;
+  showWalkTab(); // an answer's highlighted evidence lives on the Reasoning Walk tab, not the schema overview
 
   const refs = new Set([panel.entity_id]);
   (panel.relationships || []).forEach((r) => r.ref && refs.add(r.ref));
@@ -934,6 +1160,7 @@ function focusAnswerInGraph(panel) {
   });
   renderFilterChips();
   applyVisibility();
+  layoutScopedSubgraph(refs);
 
   clearHighlight();
   graphState.nodes.forEach((node) => {
@@ -951,28 +1178,63 @@ function focusAnswerInGraph(panel) {
     }
   });
 
-  explorerHint.textContent = `Showing evidence for "${panel.entity}".`;
+  // Scoped mode: hide the category filter chips (the graph is already
+  // showing exactly this answer's evidence, nothing to filter further) and
+  // report the scoped count instead of the generic browse-mode hint.
+  graphState.scopedToAnswer = true;
+  graphState.scopedCount = refs.size;
+  applyWalkUiState();
+  graphState.zoom = 1; // reset in case a previous answer/browsing session left it zoomed out
   panToNode(panel.entity_id, { select: true });
 }
 
 // Time each walk step stays "current" before advancing, in ms.
 const WALK_STEP_DELAY_MS = 550;
 
+// Plain-language narration log shown in the floating "Reasoning trace"
+// panel on the graph viewport -- fed both by the live SSE walk (as it
+// happens) and by the post-hoc/manual replay below, so it always reflects
+// whatever's actually driving the highlight right now. Each line is
+// numbered (step order matters -- it's a walk, not just a list of facts)
+// and the log scrolls internally once it outgrows the panel.
+let traceLineCount = 0;
+
+function logTraceLine(text, cls) {
+  if (!text) return;
+  document.querySelectorAll("#traceLogBody .log-entry").forEach((el) => el.classList.remove("latest"));
+  traceLineCount += 1;
+  const entry = document.createElement("div");
+  entry.className = `log-entry latest${cls ? ` ${cls}` : ""}`;
+  const n = document.createElement("span");
+  n.className = "log-entry-n";
+  n.textContent = String(traceLineCount);
+  entry.appendChild(n);
+  entry.appendChild(document.createTextNode(text));
+  traceLogBody.appendChild(entry);
+  traceLogBody.scrollTop = traceLogBody.scrollHeight;
+}
+
+function resetTraceLog() {
+  traceLogBody.innerHTML = "";
+  traceLineCount = 0;
+}
+
 // Replays `panel.walk` (see agent.py's build_graph_walk()) as an animated,
 // step-by-step highlight across the explorer -- "here's where the
 // reasoning is looking right now" -- before settling into
 // focusAnswerInGraph()'s final all-at-once highlighted state. This is a
 // post-hoc replay of the already-completed answer's tool-call/evidence
-// trace, not a live view of the agent loop actually running (that would
-// need streaming/SSE from /api/chat, which doesn't exist here -- see
-// docs/CHAT_AGENT.md §4b's "Known limitation" note) -- but it's what turns
-// the previous instant snapshot into a visible walk across the graph.
+// trace (used automatically for the deterministic fallback path, which has
+// no live SSE steps to show) -- but the exact same steps are also kept
+// around afterwards (see lastWalkSteps below) so the user can manually
+// replay them later via the reasoning-trace panel's play/step controls.
 function animateGraphWalk(panel) {
   const steps = (panel && panel.walk) || [];
   if (!panel || !panel.entity_id || !graphState.nodesById.has(panel.entity_id) || steps.length === 0) {
     focusAnswerInGraph(panel);
     return;
   }
+  showWalkTab();
 
   // Reveal whatever categories the whole walk will touch up front, so
   // nothing pops in/out mid-animation.
@@ -1011,12 +1273,14 @@ function animateGraphWalk(panel) {
       graphState.nodes.forEach((node) => node.el.classList.remove("walk-current", "walk-visited"));
       graphState.edges.forEach((edge) => edge.el.classList.remove("walk-current", "walk-visited"));
       focusAnswerInGraph(panel);
+      logTraceLine("Answer settled -- full path highlighted.", "final");
       return;
     }
 
     const step = steps[i];
     const ids = step.node_ids || [];
     explorerHint.textContent = step.label;
+    logTraceLine(step.label);
     graphState.nodes.forEach((node) => {
       if (ids.includes(node.id)) node.el.classList.add("walk-current");
     });
@@ -1044,6 +1308,7 @@ function liveWalkReset() {
 function liveWalkStep(step) {
   const ids = (step && step.node_ids) || [];
   if (ids.length === 0) return;
+  showWalkTab();
 
   ids.forEach((id) => {
     const node = graphState.nodesById.get(id);
@@ -1072,7 +1337,10 @@ function liveWalkStep(step) {
     if (ids.includes(edge.source) && ids.includes(edge.target)) edge.el.classList.add("walk-current");
   });
   panToNode(ids[0]);
-  if (step.label) explorerHint.textContent = step.label;
+  if (step.label) {
+    explorerHint.textContent = step.label;
+    logTraceLine(step.label);
+  }
 
   liveWalk.prevIds = ids;
 }
@@ -1081,7 +1349,120 @@ function liveWalkFinish() {
   graphState.nodes.forEach((node) => node.el.classList.remove("walk-current", "walk-visited"));
   graphState.edges.forEach((edge) => edge.el.classList.remove("walk-current", "walk-visited"));
   liveWalk.prevIds = [];
+  logTraceLine("Answer settled -- full path highlighted.", "final");
 }
+
+// --- Manual replay controls (play/step/reset) on the reasoning-trace panel
+// itself -- lets the user re-watch the walk that just answered (or any
+// earlier answer, since lastPanel/lastWalkSteps are overwritten per turn),
+// independent of whichever path (live SSE or post-hoc) originally drove it.
+let lastPanel = null;
+let lastWalkSteps = [];
+let replayIndex = -1;
+let replayTimer = null;
+
+function setPlayIcon(playing) {
+  tracePlayBtn.textContent = playing ? "⏸" : "▶";
+  tracePlayBtn.classList.toggle("playing", playing);
+  tracePlayBtn.title = playing ? "Pause" : "Play walk";
+  tracePlayBtn.setAttribute("aria-label", tracePlayBtn.title);
+  tracePlayBtn.dataset.tip = tracePlayBtn.title;
+}
+
+function stopReplay() {
+  clearInterval(replayTimer);
+  replayTimer = null;
+  setPlayIcon(false);
+}
+
+// Applies one step's node/edge classes (current + demoting the previous
+// step to a fading "visited" trail) -- the same visual language as
+// animateGraphWalk()/liveWalkStep() above, just driven by manual
+// play/step clicks instead of a timer or live SSE events.
+function applyReplayStep(i) {
+  if (i > 0) {
+    const prevIds = lastWalkSteps[i - 1].node_ids || [];
+    graphState.nodes.forEach((node) => {
+      if (prevIds.includes(node.id)) {
+        node.el.classList.remove("walk-current");
+        node.el.classList.add("walk-visited");
+      }
+    });
+    graphState.edges.forEach((edge) => {
+      if (prevIds.includes(edge.source) && prevIds.includes(edge.target)) {
+        edge.el.classList.remove("walk-current");
+        edge.el.classList.add("walk-visited");
+      }
+    });
+  }
+
+  if (i >= lastWalkSteps.length) {
+    graphState.nodes.forEach((node) => node.el.classList.remove("walk-current", "walk-visited"));
+    graphState.edges.forEach((edge) => edge.el.classList.remove("walk-current", "walk-visited"));
+    if (lastPanel) focusAnswerInGraph(lastPanel);
+    logTraceLine("Answer settled -- full path highlighted.", "final");
+    stopReplay();
+    return;
+  }
+
+  const step = lastWalkSteps[i];
+  const ids = step.node_ids || [];
+  ids.forEach((id) => {
+    const node = graphState.nodesById.get(id);
+    if (node) graphState.activeCategories.add(categoryFor(node.label));
+  });
+  renderFilterChips();
+  applyVisibility();
+  graphState.nodes.forEach((node) => {
+    if (ids.includes(node.id)) node.el.classList.add("walk-current");
+  });
+  graphState.edges.forEach((edge) => {
+    if (ids.includes(edge.source) && ids.includes(edge.target)) edge.el.classList.add("walk-current");
+  });
+  if (ids.length > 0) panToNode(ids[0]);
+  explorerHint.textContent = step.label;
+  logTraceLine(step.label);
+}
+
+tracePlayBtn.addEventListener("click", () => {
+  if (replayTimer) {
+    stopReplay();
+    return;
+  }
+  if (!lastWalkSteps.length) return;
+  if (replayIndex >= lastWalkSteps.length) {
+    replayIndex = -1;
+    resetTraceLog();
+  }
+  clearHighlight();
+  showWalkTab();
+  setPlayIcon(true);
+  replayTimer = setInterval(() => {
+    replayIndex++;
+    applyReplayStep(replayIndex);
+    if (replayIndex >= lastWalkSteps.length) stopReplay();
+  }, WALK_STEP_DELAY_MS);
+});
+
+traceStepBtn.addEventListener("click", () => {
+  stopReplay(); // manual stepping takes over from any running auto-play
+  if (!lastWalkSteps.length) return;
+  if (replayIndex >= lastWalkSteps.length) {
+    replayIndex = -1;
+    resetTraceLog();
+    clearHighlight();
+  }
+  showWalkTab();
+  replayIndex++;
+  applyReplayStep(replayIndex);
+});
+
+traceResetBtn.addEventListener("click", () => {
+  stopReplay();
+  replayIndex = -1;
+  resetTraceLog();
+  clearHighlight();
+});
 
 function renderFilterChips() {
   graphFilterGroup.innerHTML = "";
@@ -1111,24 +1492,219 @@ function renderFilterChips() {
   });
 }
 
-function drawGraphEdgeEl(fromNode, toNode) {
-  const el = document.createElement("div");
-  el.className = "graph-edge";
+// ===========================================================================
+// Ontology Overview -- a small, ALWAYS-BOUNDED schema/type-level diagram (one
+// node per record type + a live count, computed from the same /api/graph
+// payload the Reasoning Walk tab uses), instead of the per-instance graph.
+// This answers "why isn't the whole plant graph shown at once": with 100+
+// AlarmEvent instances alone, rendering every record would be a hairball --
+// this view is bounded at one node per type no matter how much data exists.
+// ===========================================================================
+const OVERVIEW_TYPE_COLOR = {
+  Asset: "#f9c74f",
+  AlarmEvent: "#f94144",
+  AlarmConfig: "#f94144",
+  WorkOrder: "#577590",
+  OperatorAction: "#f8961e",
+  HealthEvent: "#9b5de5",
+  CostPosting: "#43aa8b",
+  HistorianTag: "#adb5bd",
+};
 
-  const fromX = fromNode.x;
-  const fromY = fromNode.y;
-  const toX = toNode.x;
-  const toY = toNode.y;
-  const dx = toX - fromX;
-  const dy = toY - fromY;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+const OVERVIEW_TYPE_INFO = {
+  Asset: { source: "Stage 1 entity resolution", fields: "canonical_name, confidence, system_ids" },
+  AlarmEvent: { source: "AM", fields: "priority, value, state, timestamp" },
+  AlarmConfig: { source: "AM", fields: "HH/H/L/LL limits, deadband" },
+  WorkOrder: { source: "CMMS", fields: "status, type, technician" },
+  OperatorAction: { source: "DCS", fields: "setpoint change, operator, time" },
+  HealthEvent: { source: "APM", fields: "condition, severity, notes" },
+  CostPosting: { source: "ERP", fields: "amount, linked_wo" },
+  HistorianTag: { source: "Historian", fields: "description, unit, min, max" },
+};
 
-  el.style.left = `${fromX}px`;
-  el.style.top = `${fromY}px`;
-  el.style.width = `${len}px`;
-  el.style.transform = `rotate(${angle}deg)`;
+// Fixed layout (viewBox 0-300 x 0-260) -- the schema shape doesn't change at
+// runtime, only the counts do, so static positions are fine.
+const OVERVIEW_LAYOUT = [
+  { label: "AlarmEvent", edgeType: "HAS_ALARM", x: 90, y: 55 },
+  { label: "AlarmConfig", edgeType: "HAS_ALARM_CONFIG", x: 168, y: 32 },
+  { label: "WorkOrder", edgeType: "HAS_WORK_ORDER", x: 238, y: 58 },
+  { label: "OperatorAction", edgeType: "HAS_SETPOINT_CHANGE", x: 268, y: 128 },
+  { label: "HealthEvent", edgeType: "HAS_HEALTH_EVENT", x: 240, y: 198 },
+  { label: "CostPosting", edgeType: "HAS_COST_POSTING", x: 168, y: 224 },
+  { label: "HistorianTag", edgeType: "HAS_HISTORIAN_TAG", x: 92, y: 205 },
+];
+
+function renderTypeInspector(label, count) {
+  inspector.classList.add("show");
+  inspector.innerHTML = "";
+  const title = document.createElement("p");
+  title.className = "inspector-title";
+  title.textContent = label;
+  inspector.appendChild(title);
+  const sub = document.createElement("p");
+  sub.className = "muted";
+  sub.textContent = `Type node · ${count} instance${count === 1 ? "" : "s"}`;
+  inspector.appendChild(sub);
+  const info = OVERVIEW_TYPE_INFO[label];
+  if (info) {
+    const table = document.createElement("dl");
+    table.className = "inspector-fields";
+    const dt1 = document.createElement("dt");
+    dt1.textContent = "source system";
+    const dd1 = document.createElement("dd");
+    dd1.textContent = info.source;
+    const dt2 = document.createElement("dt");
+    dt2.textContent = "fields";
+    const dd2 = document.createElement("dd");
+    dd2.textContent = info.fields;
+    table.append(dt1, dd1, dt2, dd2);
+    inspector.appendChild(table);
+  }
+}
+
+function overviewNode(cx, cy, r, color, label, count) {
+  const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("class", "overview-node");
+  g.setAttribute("transform", `translate(${cx} ${cy})`);
+
+  const circle = document.createElementNS(SVG_NS, "circle");
+  circle.setAttribute("r", String(r));
+  circle.setAttribute("stroke", color);
+  g.appendChild(circle);
+
+  const countText = document.createElementNS(SVG_NS, "text");
+  countText.setAttribute("class", "overview-count");
+  countText.setAttribute("y", "4");
+  countText.textContent = String(count);
+  g.appendChild(countText);
+
+  const labelText = document.createElementNS(SVG_NS, "text");
+  labelText.setAttribute("class", "overview-label");
+  labelText.setAttribute("y", String(r + 12));
+  labelText.textContent = label;
+  g.appendChild(labelText);
+
+  g.addEventListener("mouseenter", () => renderTypeInspector(label, count));
+  g.addEventListener("mouseleave", () => resetInspectorToDefault());
+  return g;
+}
+
+function renderOntologyOverview(rawNodes, rawEdges) {
+  const counts = {};
+  rawNodes.forEach((n) => {
+    counts[n.label] = (counts[n.label] || 0) + 1;
+  });
+  const edgeCounts = {};
+  rawEdges.forEach((e) => {
+    edgeCounts[e.type] = (edgeCounts[e.type] || 0) + 1;
+  });
+
+  viewOverview.innerHTML = "";
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 300 260");
+  svg.setAttribute("class", "overview-svg");
+
+  const centerX = 150;
+  const centerY = 128;
+  const centerR = 26;
+
+  const visibleTypes = OVERVIEW_LAYOUT.filter((item) => counts[item.label]);
+
+  // Edges first, so nodes render on top of them.
+  visibleTypes.forEach((item) => {
+    const line = document.createElementNS(SVG_NS, "line");
+    line.setAttribute("x1", String(centerX));
+    line.setAttribute("y1", String(centerY));
+    line.setAttribute("x2", String(item.x));
+    line.setAttribute("y2", String(item.y));
+    line.setAttribute("class", "overview-edge");
+    const title = document.createElementNS(SVG_NS, "title");
+    title.textContent = `${item.edgeType} (${edgeCounts[item.edgeType] || 0})`;
+    line.appendChild(title);
+    svg.appendChild(line);
+  });
+
+  // Asset-to-asset process topology (FEEDS/COOLS/SUPPLIES_UTILITY) shown as
+  // a small self-loop on the Asset hub, combined count in its hover title.
+  const topologyCount =
+    (edgeCounts.FEEDS || 0) + (edgeCounts.COOLS || 0) + (edgeCounts.SUPPLIES_UTILITY || 0);
+  if (topologyCount > 0) {
+    const loop = document.createElementNS(SVG_NS, "path");
+    loop.setAttribute(
+      "d",
+      `M ${centerX - 14},${centerY + 20} C ${centerX - 48},${centerY + 4} ${centerX - 48},${centerY - 30} ${centerX - 10},${centerY - 22}`
+    );
+    loop.setAttribute("class", "overview-edge");
+    const title = document.createElementNS(SVG_NS, "title");
+    title.textContent = `FEEDS (${edgeCounts.FEEDS || 0}) / COOLS (${edgeCounts.COOLS || 0}) / SUPPLIES_UTILITY (${edgeCounts.SUPPLIES_UTILITY || 0})`;
+    loop.appendChild(title);
+    svg.appendChild(loop);
+  }
+
+  visibleTypes.forEach((item) => {
+    svg.appendChild(overviewNode(item.x, item.y, 14, OVERVIEW_TYPE_COLOR[item.label], item.label, counts[item.label]));
+  });
+
+  svg.appendChild(
+    overviewNode(centerX, centerY, centerR, OVERVIEW_TYPE_COLOR.Asset, "Asset", counts.Asset || 0)
+  );
+
+  viewOverview.appendChild(svg);
+}
+
+// Gentle quadratic-bezier curve between two nodes (perpendicular offset
+// proportional to the segment length, capped) instead of a straight line --
+// purely cosmetic (matches design_mockups/frontend_redesign_v3.html), and
+// it also helps separate edges that would otherwise overlap when several
+// converge on the same hub node.
+function curvedEdgePath(fromNode, toNode) {
+  const dx = toNode.x - fromNode.x;
+  const dy = toNode.y - fromNode.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const curvature = Math.min(dist * 0.18, 45);
+  const mx = (fromNode.x + toNode.x) / 2;
+  const my = (fromNode.y + toNode.y) / 2;
+  const nx = -dy / dist;
+  const ny = dx / dist;
+  const cx = mx + nx * curvature;
+  const cy = my + ny * curvature;
+  return `M ${fromNode.x} ${fromNode.y} Q ${cx} ${cy} ${toNode.x} ${toNode.y}`;
+}
+
+function drawGraphEdgeEl(fromNode, toNode, edgeType) {
+  const el = document.createElementNS(SVG_NS, "path");
+  el.setAttribute("class", "graph-edge");
+  el.setAttribute("fill", "none");
+  el.setAttribute("d", curvedEdgePath(fromNode, toNode));
+  if (edgeType) {
+    // Hover-only relation label (never shown by default) -- an SVG <title>
+    // child renders as the browser's native tooltip, same as the HTML
+    // title attribute would, just the SVG-correct way to do it.
+    const title = document.createElementNS(SVG_NS, "title");
+    title.textContent = edgeType;
+    el.appendChild(title);
+  }
   return el;
+}
+
+// Traditional node-and-edge circle sizing per record type -- Asset nodes
+// (the ontology's backbone) are largest, everything else smaller and
+// scaled down further still for the busiest category (AlarmEvent, which
+// can run into the hundreds of instances) so labels don't collide as much.
+const NODE_RADIUS = {
+  Asset: 14,
+  AlarmEvent: 7,
+  AlarmConfig: 8,
+  WorkOrder: 8,
+  OperatorAction: 8,
+  HealthEvent: 8,
+  CostPosting: 8,
+  HistorianTag: 7,
+};
+
+function truncateLabel(text, max = 22) {
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max - 1)}\u2026` : text;
 }
 
 async function loadPlantGraph() {
@@ -1143,6 +1719,8 @@ async function loadPlantGraph() {
 
   const rawNodes = data.nodes || [];
   const rawEdges = data.edges || [];
+
+  renderOntologyOverview(rawNodes, rawEdges);
 
   const width = Math.max(graphViewport.clientWidth * 1.6, 1200);
   const height = Math.max(graphViewport.clientHeight * 1.6, 900);
@@ -1165,6 +1743,19 @@ async function loadPlantGraph() {
     .filter((e) => e.sourceIdx != null && e.targetIdx != null);
 
   computeForceLayout(nodes, edges, width, height);
+  // Full graph is denser/has more categories than a scoped answer -- orient
+  // using just the Asset "backbone" (so ~150 densely-clustered AlarmEvent
+  // points don't skew the axis), gentler flatten so per-asset alarm
+  // clusters don't overlap, and no tight re-fit (keeps the existing
+  // pan/zoom margin instead of stretching to fill every pixel).
+  orientSubgraphHorizontally(nodes, width, height, {
+    pcaNodes: nodes.filter((n) => n.label === "Asset"),
+    flatten: 0.8,
+    tiltDegrees: -4,
+    refit: false,
+  });
+  graphState.canvasWidth = width;
+  graphState.canvasHeight = height;
 
   graphState.nodesById = nodesById;
   graphState.edgesByNode = new Map();
@@ -1175,35 +1766,46 @@ async function loadPlantGraph() {
   });
 
   plantGraph.innerHTML = "";
-  plantGraph.style.width = `${width}px`;
-  plantGraph.style.height = `${height}px`;
+  // Attributes (not CSS width/height) so 1 SVG user-unit = 1px, matching the
+  // force layout's pixel-space x/y with no viewBox scaling to account for.
+  plantGraph.setAttribute("width", String(width));
+  plantGraph.setAttribute("height", String(height));
 
   const edgeEls = edges.map((edge) => {
-    const el = drawGraphEdgeEl(nodesById.get(edge.source), nodesById.get(edge.target));
+    const el = drawGraphEdgeEl(nodesById.get(edge.source), nodesById.get(edge.target), edge.type);
     plantGraph.appendChild(el);
     return { ...edge, el };
   });
 
   const nodeEls = nodes.map((node) => {
-    const style = NODE_STYLE[node.label] || {};
-    const el = document.createElement("div");
-    el.className = `node graph-node ${style.className || "node-other"}`;
-    el.style.left = `${node.x}px`;
-    el.style.top = `${node.y}px`;
+    const r = NODE_RADIUS[node.label] || 7;
+    const el = document.createElementNS(SVG_NS, "g");
+    el.setAttribute("class", "node graph-node");
+    el.setAttribute("transform", `translate(${node.x} ${node.y})`);
 
-    const title = document.createElement("div");
-    title.className = "node-title";
-    title.textContent = nodeLabelText(node);
-    el.appendChild(title);
+    const ring = document.createElementNS(SVG_NS, "circle");
+    ring.setAttribute("class", "node-ring");
+    ring.setAttribute("r", String(r));
+    el.appendChild(ring);
 
-    if (node.label !== "Asset") {
-      const meta = document.createElement("div");
-      meta.className = "node-meta";
-      meta.textContent = node.label;
-      el.appendChild(meta);
-    }
+    const circle = document.createElementNS(SVG_NS, "circle");
+    circle.setAttribute("class", "node-circle");
+    circle.setAttribute("r", String(r));
+    circle.setAttribute("stroke", OVERVIEW_TYPE_COLOR[node.label] || "#858f9c");
+    el.appendChild(circle);
+
+    const label = document.createElementNS(SVG_NS, "text");
+    label.setAttribute("class", "node-label");
+    label.setAttribute("y", String(r + 12));
+    label.textContent = truncateLabel(nodeLabelText(node));
+    el.appendChild(label);
 
     el.addEventListener("click", () => selectNode(node.id));
+    // Hover preview: shows the node's info immediately on hover, reverting
+    // to whatever's pinned (or the default hint) once the mouse leaves --
+    // clicking still pins it so it stays visible after moving away.
+    el.addEventListener("mouseenter", () => renderInspector(node));
+    el.addEventListener("mouseleave", () => resetInspectorToDefault());
     plantGraph.appendChild(el);
     node.el = el;
     return node;
@@ -1243,6 +1845,17 @@ let dragState = null;
 
 graphViewport.addEventListener("mousedown", (e) => {
   if (e.target.closest(".graph-node")) return; // don't start a pan from a node click
+  // ...or from interacting with a floating overlay panel (reasoning trace,
+  // inspector, zoom stack, legend) -- those sit on top of the canvas but
+  // shouldn't drag it.
+  if (
+    e.target.closest("#reasoningTrace") ||
+    e.target.closest("#inspector") ||
+    e.target.closest(".zoom-stack") ||
+    e.target.closest(".graph-legend")
+  ) {
+    return;
+  }
   dragState = { startX: e.clientX, startY: e.clientY, panX: graphState.pan.x, panY: graphState.pan.y };
   graphViewport.classList.add("grabbing");
 });
@@ -1273,6 +1886,33 @@ zoomResetBtn.addEventListener("click", () => {
   graphState.zoom = 1;
   updateGraphTransform();
 });
+
+// Gentle, proportional-to-scroll-amount zoom (not a fixed jump per wheel
+// tick) so a single fast trackpad/mouse-wheel tick only moves the zoom
+// level by a few percent -- anchored to the cursor position so the point
+// under it stays put while zooming. Only active on the Reasoning Walk tab,
+// and skipped entirely (falls through to native scrolling) when the
+// pointer is over the reasoning-trace log or the inspector, so those can
+// still be scrolled normally with the mouse wheel.
+graphViewport.addEventListener(
+  "wheel",
+  (e) => {
+    if (!viewWalk.classList.contains("active")) return;
+    if (e.target.closest("#reasoningTrace") || e.target.closest("#inspector")) return;
+    e.preventDefault();
+    const rect = graphViewport.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const delta = Math.max(-40, Math.min(40, e.deltaY));
+    const factor = 1 - delta * 0.0035;
+    const newZoom = Math.min(2.2, Math.max(0.3, graphState.zoom * factor));
+    graphState.pan.x = mouseX - (mouseX - graphState.pan.x) * (newZoom / graphState.zoom);
+    graphState.pan.y = mouseY - (mouseY - graphState.pan.y) * (newZoom / graphState.zoom);
+    graphState.zoom = newZoom;
+    updateGraphTransform();
+  },
+  { passive: false }
+);
 
 loadPlantGraph();
 
