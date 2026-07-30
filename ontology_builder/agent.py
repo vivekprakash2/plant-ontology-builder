@@ -73,6 +73,7 @@ class AgentAnswer:
     asset_id: Optional[str] = None  # unified_id, used to build the UI's relationship panel
     recommendation: Optional[str] = None  # shown in its own "Recommended Actions" panel
     headline: Optional[str] = None  # short, punchy summary for the big bold UI title
+    truncated: bool = False  # model hit its output limit (finish_reason == "length")
 
 
 def _anchor_to_unified_id(entities: list[dict[str, Any]], anchor: tuple[str, str]) -> Optional[str]:
@@ -685,8 +686,19 @@ def _answer_alarm_flood(entities, kg, unified_id) -> AgentAnswer:
 def _answer_full_context(entities, kg, unified_id) -> AgentAnswer:
     name = _asset_name(entities, unified_id)
     context = kg.context_for_asset(unified_id)
+    # Tag each record with the type key `_describe_record()` dispatches on --
+    # NOT the raw graph node label. Using the raw label ("AlarmEvent" instead
+    # of "alarm_event") meant every single record was silently dropped from
+    # the UI panel's timeline/evidence AND from the graph walk, so the one
+    # question whose entire point is "here is everything we unified across
+    # six systems" rendered as a bare sentence of counts with a 2-node walk.
+    # Neighbouring Asset nodes are skipped: they aren't records, and they
+    # already appear in the panel's `relationships` list.
     evidence = [
-        {"type": label, **rec} for label, records in context.items() for rec in records
+        {**rec, "type": _CONTEXT_LABEL_TO_TYPE[label]}
+        for label, records in context.items()
+        if label in _CONTEXT_LABEL_TO_TYPE
+        for rec in records
     ]
     counts = ", ".join(f"{label}: {len(records)}" for label, records in context.items())
     entity = next(e for e in entities if e["unified_id"] == unified_id)
@@ -813,6 +825,14 @@ _AGENT_SYSTEM_PROMPT = (
     "4. When reasoning about causes, consider both the asset's own history AND related "
     "upstream/downstream assets via get_related_assets -- some problems cascade across equipment "
     "(e.g. a fouled exchanger raising a downstream heater's fuel use).\n"
+    "4a. CRITICAL: get_related_assets only tells you a neighbour EXISTS -- that is not evidence "
+    "about it. If a related asset could plausibly explain the symptom (especially a COOLS or "
+    "SUPPLIES_UTILITY neighbour when something is overheating, or an upstream FEEDS neighbour "
+    "when a downstream unit is working harder), you MUST call get_asset_context on that "
+    "neighbour and get_historian_trend on its relevant tag before concluding. Never report a "
+    "cause as 'unconfirmed' or 'no supporting evidence' while a named related asset is still "
+    "unchecked -- go and check it. When the question compares two assets, gather the same depth "
+    "of evidence for BOTH, not just the one you looked at first.\n"
     "4b. list_assets and get_asset_context both return each asset's own 'monitored_params' (or "
     "'asset_monitored_params') when APM covers it -- e.g. a pump's own suction pressure. If one of "
     "an asset's own monitored parameters is trending abnormally, treat that as a legitimate "
@@ -1012,7 +1032,15 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
 ]
 
-_MAX_AGENT_TURNS = 12
+# Output budget per turn. Tool-call-only turns emit almost nothing regardless,
+# so this is really the budget for the FINAL answer. Raised 1000 -> 1600 -> 2400
+# after a live run still cut a Recommended Actions bullet off mid-word; a
+# `finish_reason == "length"` response now also gets one retry at
+# _ANSWER_RETRY_MAX_TOKENS before the answer is flagged `truncated`.
+_ANSWER_MAX_TOKENS = 2400
+_ANSWER_RETRY_MAX_TOKENS = 3600
+
+_MAX_AGENT_TURNS = 14
 # Raised from 7 to 12 after live-testing found a genuine 2-hop question (Column
 # dP <- H-101 <- E-101 fouling -- the exact S3 cascade from SCENARIO.md) hitting
 # "inconclusive within the tool-call budget" despite the model having already
@@ -1025,7 +1053,10 @@ _MAX_AGENT_TURNS = 12
 # independent lookups can. 7 was sized before `write_plan` existed; 12 gives
 # enough headroom for plan-update turns + a real 2-3 hop causal chain without
 # materially hurting latency (each turn's cost is dominated by the model's own
-# response time, not the turn-loop overhead).
+# response time, not the turn-loop overhead). Nudged 12 -> 14 alongside prompt
+# rule 4a, which asks the model to pull a related asset's OWN evidence rather
+# than stopping at "the neighbour exists" -- that's 1-2 extra sequential calls
+# on comparison/cascade questions.
 
 # Node labels that hold free-text/content fields worth searching, mapped to
 # the plant IT system that produces them (matches the system names used
@@ -1422,21 +1453,41 @@ def _run_agentic_events(
     plan_steps: list[dict[str, str]] = []
 
     for _ in range(_MAX_AGENT_TURNS):
-        # 1600 tokens -- enough headroom for a full "## Headline" + "## Root
-        # Cause" + "## Recommended Actions" answer without truncating before
-        # the final section (tool-call-only turns produce short output
-        # regardless, so this is a safe budget for every turn, not just the
-        # final one). Raised from 1000 after observing Recommended Actions
-        # still getting cut off on verbose Root Cause responses.
-        message = provider.chat(messages, tools=TOOL_SCHEMAS, max_tokens=1600)
+        message = provider.chat(messages, tools=TOOL_SCHEMAS, max_tokens=_ANSWER_MAX_TOKENS)
+        # Pop before appending: this is our own bookkeeping field, and echoing
+        # it back to the API on the next turn could be rejected.
+        finish_reason = message.pop("_finish_reason", None)
         messages.append(message)
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
             content = (message.get("content") or "").strip()
+
+            # One retry at a larger budget if the model was cut off
+            # mid-sentence. Truncation used to be silent -- a half-written
+            # Recommended Actions bullet rendered as if it were the finished
+            # answer (see docs/CHAT_AGENT.md Sec 5).
+            if finish_reason == "length":
+                retry = provider.chat(messages[:-1], tools=TOOL_SCHEMAS, max_tokens=_ANSWER_RETRY_MAX_TOKENS)
+                retry_reason = retry.pop("_finish_reason", None)
+                retry_content = (retry.get("content") or "").strip()
+                if retry_content and not (retry.get("tool_calls") or []):
+                    messages[-1] = retry
+                    content = retry_content
+                    finish_reason = retry_reason
+
+            truncated = finish_reason == "length"
             primary_id = _primary_asset_id_from_trace(trace)
             headline, root_cause, recommendation = _split_agent_response(
                 content or "The model returned an empty response."
             )
+            if truncated:
+                # Be honest in the answer text itself, not just in a flag the
+                # UI might not render.
+                root_cause = (
+                    f"{root_cause}\n\n_(This answer was cut off by the model's output limit -- "
+                    "the reasoning above is complete as far as it goes, but may be missing its "
+                    "final points.)_"
+                )
             answer = AgentAnswer(
                 asset=_asset_name(entities, primary_id) if primary_id else None,
                 scenario="agentic",
@@ -1447,6 +1498,7 @@ def _run_agentic_events(
                 asset_id=primary_id,
                 recommendation=recommendation,
                 headline=headline,
+                truncated=truncated,
             )
             yield {"type": "final", "answer": answer, "plan": plan_steps}
             return
@@ -1564,6 +1616,7 @@ def _final_payload(
         "raw_answer": answer.raw_answer,
         "presented_by": answer.presented_by,
         "confidence": answer.confidence,
+        "truncated": answer.truncated,
         "evidence": answer.evidence,
         "panel": build_ui_panel(entities, kg, answer),
         "plan": plan,
@@ -1615,6 +1668,15 @@ _RECORD_LABEL_TO_TYPE = {
     "CostPosting": "cost_posting",
 }
 
+# Superset of _RECORD_LABEL_TO_TYPE used ONLY by `_answer_full_context` (the
+# "show me everything known about X across all systems" question), which is
+# meant to enumerate every artifact attached to an asset. HistorianTag is
+# metadata rather than a dated event, so it's deliberately NOT in the base map
+# -- a diagnostic answer shouldn't list all of an asset's tags as evidence
+# cards (its relevant trends already render as charts), but a "show me
+# everything" answer absolutely should.
+_CONTEXT_LABEL_TO_TYPE = {**_RECORD_LABEL_TO_TYPE, "HistorianTag": "historian_tag"}
+
 _TIMELINE_SOURCE = {
     "alarm_event": "AM",
     "alarm_config": "AM",
@@ -1623,6 +1685,7 @@ _TIMELINE_SOURCE = {
     "health_event": "APM",
     "cost_posting": "ERP",
     "historian_trend": "HIST",
+    "historian_tag": "HIST",
 }
 
 
@@ -1694,6 +1757,19 @@ def _describe_record(item: dict[str, Any]) -> Optional[dict[str, str]]:
             "ref": item.get("id", ""),
             "text": f"Configured alarm limits for {item.get('id')}: {limits_text}, "
                     f"deadband {item.get('deadband')}{unit}.",
+        }
+    if t == "historian_tag":
+        unit = item.get("eng_unit") or ""
+        desc = item.get("description") or item.get("id", "")
+        return {
+            "type": t,
+            # Tag metadata, not a dated event -- excluded from the Timeline
+            # (build_ui_panel filters on a truthy "time"), shown as an
+            # evidence card, and walkable as a real graph node.
+            "time": "",
+            "source": _TIMELINE_SOURCE[t],
+            "ref": item.get("id", ""),
+            "text": f"Historian tag {item.get('id')}: {desc}" + (f" ({unit})" if unit else ""),
         }
     if t == "historian_trend" and "direction" in item:
         pct = item.get("pct_change")

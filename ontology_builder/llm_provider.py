@@ -329,7 +329,21 @@ class OpenAICompatibleTextGenerationProvider(TextGenerationProvider):
         )
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]
+        choice = data["choices"][0]
+        message = choice["message"]
+        # Surface the stop reason on the returned message so callers can tell a
+        # COMPLETE answer from one the model was cut off mid-sentence
+        # (`finish_reason == "length"`). Without this, truncation was entirely
+        # silent: agent.py parsed the half-written Markdown and the UI rendered
+        # it as a finished answer (observed live -- a Recommended Actions bullet
+        # ending "...to protect cr").
+        #
+        # Deliberately an underscore-prefixed key that callers POP before
+        # appending the message back into the conversation, so this internal
+        # field is never echoed to the API on a later turn.
+        if choice.get("finish_reason"):
+            message["_finish_reason"] = choice["finish_reason"]
+        return message
 
 
 _text_provider_singleton: Optional[TextGenerationProvider] = None

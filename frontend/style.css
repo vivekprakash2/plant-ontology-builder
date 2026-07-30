@@ -130,6 +130,31 @@ body {
   flex: 1;
 }
 
+/* Wordmark doubles as a home button. */
+.brand-home {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 2px 10px 2px 2px;
+  margin-left: -2px;
+  transition: background 140ms ease;
+}
+
+.brand-home:hover {
+  background: var(--surface-alt);
+}
+
+.brand-home:hover h1 {
+  color: var(--accent-red);
+}
+
+.brand-home:focus-visible {
+  outline: 2px solid var(--accent-red);
+  outline-offset: 2px;
+}
+
 /* Ellie's transparent-background logo sits on a neutral circle so the black
    headset reads clearly on both the light and dark topbar. */
 .brand-logo {
@@ -353,14 +378,6 @@ h1 {
   color: var(--text-main);
 }
 
-.assistant-headline-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-
 .assistant-headline {
   font-size: 0.95rem;
   line-height: 1.35;
@@ -369,10 +386,89 @@ h1 {
   max-width: 60ch;
 }
 
+/* Provenance chips under the headline: which asset the answer resolved to,
+   and who wrote it (LLM vs the rule-based engine). */
 .assistant-meta {
-  margin-top: 0.2rem;
-  margin-bottom: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.7rem;
+}
+
+/* The confidence pill shares this row, so it aligns with the chips. */
+.assistant-meta .confidence {
+  align-self: center;
+  line-height: 1.6;
+  padding: 0.12rem 0.55rem;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  font-size: 0.68rem;
+  line-height: 1.6;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-asset {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.meta-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-red);
+  flex: none;
+}
+
+.meta-model {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.63rem;
+}
+
+/* Tinted only when a language model actually reasoned the answer, so the
+   agentic path is distinguishable from the rule-based fallback at a glance. */
+.meta-model.is-ai {
+  border-color: rgba(124, 58, 237, 0.45);
+  background: rgba(124, 58, 237, 0.09);
+  color: #6d28d9;
+}
+
+[data-theme="dark"] .meta-model.is-ai {
+  border-color: rgba(167, 139, 250, 0.4);
+  background: rgba(167, 139, 250, 0.14);
+  color: #c4b5fd;
+}
+
+.meta-icon {
   font-size: 0.72rem;
+  line-height: 1;
+}
+
+/* Shown only when the model's answer hit its output-token limit. */
+.meta-warn {
+  border-color: rgba(217, 119, 6, 0.5);
+  background: rgba(217, 119, 6, 0.1);
+  color: #b45309;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .meta-warn {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
 }
 
 /* Uppercase mini-headings separating an assistant card's sections
@@ -1234,6 +1330,17 @@ textarea:focus-visible {
   stroke-width: 3.5px;
 }
 
+/* Pinned by a click (mirrors .node.selected on the walk view). */
+.overview-node.selected circle {
+  stroke-width: 4px;
+  stroke-dasharray: 4 2.5;
+}
+
+.overview-node.selected text.overview-label {
+  fill: var(--text-main);
+  font-weight: 700;
+}
+
 .overview-node:hover text.overview-label {
   fill: var(--text-main);
   font-weight: 650;
@@ -1306,12 +1413,30 @@ textarea:focus-visible {
   stroke: none;
 }
 
+/* Labels get a knockout halo in the canvas background color (painted UNDER
+   the glyphs via paint-order) so a caption stays legible where edges or
+   neighbouring dots run behind it -- the single biggest readability win on a
+   busy subgraph. */
 .node .node-label {
-  fill: var(--text-muted);
-  font-size: 10px;
+  fill: var(--text-main);
+  font-size: 10.5px;
+  font-weight: 500;
   text-anchor: middle;
   font-family: inherit;
   pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--graph-bg-1);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+
+/* Same treatment for the schema view's node + edge captions. */
+.overview-node text.overview-label,
+.overview-edge-label {
+  paint-order: stroke;
+  stroke: var(--graph-bg-1);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 .node.hidden-node {
@@ -1536,6 +1661,26 @@ textarea:focus-visible {
 .inspector-alias-list li:hover {
   background: var(--surface-alt);
   color: var(--accent-red-deep);
+}
+
+/* Instance ids in a pinned schema-type panel -- read-only, monospace, and
+   the reason that panel is worth scrolling (126 alarm ids, say). */
+.inspector-instance-list li {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  cursor: default;
+  padding: 0.05rem 0.3rem;
+}
+
+.inspector-instance-list li:hover {
+  background: transparent;
+  color: inherit;
+}
+
+.insp-more {
+  margin: 0.3rem 0 0;
+  font-size: 0.7rem;
+  font-style: italic;
 }
 
 .empty-hint {

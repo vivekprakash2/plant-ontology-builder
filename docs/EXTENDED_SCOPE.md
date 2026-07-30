@@ -192,7 +192,7 @@ neither built:
   `plan`/`tool_call`/`tool_result` events live as the agentic loop runs, plus a new `write_plan` tool (model
   calls it first with a 3-6 step investigation plan, updates it as steps complete) so the UI can render a
   real checklist, not just an inferred one. `server.py`'s `/api/chat` is now a `text/event-stream` response
-  (`stream_answer()`) instead of a single blocking JSON POST -- still single-threaded stdlib `HTTPServer`,
+  (`stream_answer()`) instead of a single blocking JSON POST -- still stdlib `http.server` (now `ThreadingHTTPServer`),
   but SSE only needs a kept-open connection with flushed writes, no async framework required.
   `frontend/app.js` reads the stream via `ReadableStream` (not `EventSource`, which can't send a POST body),
   rendering a live plan checklist + tool-call trace chips, and a new `liveWalkStep()`/`liveWalkFinish()` pair

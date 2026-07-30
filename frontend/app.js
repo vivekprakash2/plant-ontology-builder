@@ -154,7 +154,7 @@ function showWalkTab() {
   tabWalk.classList.add("active");
   viewOverview.classList.remove("active");
   viewWalk.classList.add("active");
-  if (wasOverview) hideInspector();
+  if (wasOverview) unpinInspector(); // clean slate on every tab switch
   applyWalkUiState();
   updateWalkChrome();
 }
@@ -465,7 +465,11 @@ let chatTurnCount = 0;
 const chatHead = document.getElementById("chatHead");
 
 function updateChatHead() {
-  chatHead.textContent = `Chat with Ellie · ${chatTurnCount} turn${chatTurnCount === 1 ? "" : "s"}`;
+  // No turn count before the first question -- matches the initial markup, so
+  // resetToStart() lands on exactly the opening state.
+  chatHead.textContent = chatTurnCount
+    ? `Chat with Ellie · ${chatTurnCount} turn${chatTurnCount === 1 ? "" : "s"}`
+    : "Chat with Ellie";
 }
 
 function addUserBubble(question) {
@@ -628,27 +632,57 @@ function renderAssistantBubble(turnEl, data) {
   card.appendChild(buildAgentId());
 
   const usedLlm = data.presented_by && data.presented_by !== "rule-based";
-  const badgeText = usedLlm
-    ? data.scenario === "agentic"
-      ? `🤖 reasoned by ${data.presented_by}`
-      : `✨ polished by ${data.presented_by}`
-    : "rule-based";
 
-  const headlineRow = document.createElement("div");
-  headlineRow.className = "assistant-headline-row";
   const headline = document.createElement("h3");
   headline.className = "assistant-headline";
   headline.textContent = data.headline || extractHeadline(data.answer) || "No answer text returned.";
+  card.appendChild(headline);
+
+  // One row of provenance pills under the headline -- what it's about, how
+  // sure, and who wrote it -- replacing the old run-on muted sentence
+  // ("asset: X · rule-based") plus a separately-wrapped confidence badge.
+  // The model pill is tinted when an LLM actually reasoned the answer, so
+  // "is this the agentic path?" is readable at a glance on stage.
+  const meta = document.createElement("div");
+  meta.className = "assistant-meta";
+
+  if (data.asset) {
+    const assetChip = document.createElement("span");
+    assetChip.className = "meta-chip meta-asset";
+    const dot = document.createElement("i");
+    dot.className = "meta-dot";
+    assetChip.appendChild(dot);
+    assetChip.appendChild(document.createTextNode(data.asset));
+    meta.appendChild(assetChip);
+  }
+
   const confidence = document.createElement("span");
   confidence.className = `confidence ${confidenceClass(data.confidence)}`;
   confidence.textContent = formatConfidence(data.confidence);
-  headlineRow.appendChild(headline);
-  headlineRow.appendChild(confidence);
-  card.appendChild(headlineRow);
+  meta.appendChild(confidence);
 
-  const meta = document.createElement("p");
-  meta.className = "muted assistant-meta";
-  meta.textContent = `asset: ${data.asset ?? "n/a"} · ${badgeText}`;
+  const modelChip = document.createElement("span");
+  modelChip.className = `meta-chip meta-model${usedLlm ? " is-ai" : ""}`;
+  modelChip.title = usedLlm
+    ? `Reasoned by ${data.presented_by} using read-only knowledge-graph tools`
+    : "Answered by the deterministic rule-based engine (no language model configured)";
+  const icon = document.createElement("span");
+  icon.className = "meta-icon";
+  icon.textContent = usedLlm ? "🤖" : "⚙";
+  modelChip.appendChild(icon);
+  modelChip.appendChild(document.createTextNode(usedLlm ? data.presented_by : "rule-based"));
+  meta.appendChild(modelChip);
+
+  // The model hit its output limit -- say so rather than presenting a
+  // half-written answer as complete.
+  if (data.truncated) {
+    const warn = document.createElement("span");
+    warn.className = "meta-chip meta-warn";
+    warn.title = "The model reached its output token limit; the answer may be missing its final points.";
+    warn.textContent = "⚠ cut off";
+    meta.appendChild(warn);
+  }
+
   card.appendChild(meta);
 
   // Full analysis shown directly (v3 mockup) -- the headline above is the
@@ -707,6 +741,10 @@ const chatHistory = [];
 const HISTORY_MAX_TURNS = 4;
 const HISTORY_MAX_CHARS = 2000;
 
+// AbortController for the current /api/chat stream, so resetToStart() (and a
+// new question) can cancel one that's still running.
+let activeChatAbort = null;
+
 function recordHistoryTurn(question, data) {
   const answerText = [data.headline, data.answer, data.recommendation]
     .filter(Boolean)
@@ -739,10 +777,13 @@ async function submitQuestion(question) {
   let sawLiveEvent = false;
 
   try {
+    if (activeChatAbort) activeChatAbort.abort(); // supersede any still-running answer
+    activeChatAbort = new AbortController();
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, history: chatHistory.slice() }),
+      signal: activeChatAbort.signal,
     });
     if (!res.ok || !res.body) {
       let errMsg = "request failed";
@@ -819,6 +860,10 @@ async function submitQuestion(question) {
       }
     }
   } catch (err) {
+    // An abort is a deliberate cancel (reset-to-start, or a newer question
+    // superseding this one) -- not an error, and the turn it belonged to is
+    // already gone from the thread, so say nothing.
+    if (err && err.name === "AbortError") return;
     thinkingEl.textContent = "Error: could not reach the server.";
     card.classList.remove("pending");
   } finally {
@@ -875,12 +920,61 @@ function renderStarter(questions) {
   chatThread.appendChild(wrap);
 }
 
+// Cached so resetToStart() can re-render the starter panel without refetching.
+let starterQuestions = [];
+
 fetch("/api/suggestions")
   .then((r) => r.json())
-  .then((data) => renderStarter(data.questions || []))
+  .then((data) => {
+    starterQuestions = data.questions || [];
+    renderStarter(starterQuestions);
+  })
   .catch((err) => {
     console.error("Failed to load suggestions", err);
   });
+
+// --- "Back to start" ------------------------------------------------------
+// Clicking the AskEllie wordmark/logo returns the app to its opening state.
+// Done client-side rather than as a page reload: instant, and it avoids
+// re-fetching + re-laying-out all 162 graph nodes. Any in-flight answer is
+// aborted (which also closes the server's SSE stream) so a half-streamed
+// response can't land in the fresh thread.
+function resetToStart() {
+  if (activeChatAbort) {
+    activeChatAbort.abort();
+    activeChatAbort = null;
+  }
+  stopReplay();
+  replayIndex = -1;
+  lastPanel = null;
+  lastWalkSteps = [];
+  lastAnswerText = "";
+  chatHistory.length = 0;
+  chatTurnCount = 0;
+  updateChatHead();
+  resetTraceLog();
+  clearHighlight();
+  resetWalkScope();
+  unpinInspector();
+  plantGraph.querySelectorAll(".node.anchor").forEach((n) => n.classList.remove("anchor"));
+  chatThread.innerHTML = "";
+  renderStarter(starterQuestions);
+  customQuestion.value = "";
+  runButton.disabled = false;
+  showOverviewTab();
+  chatThread.scrollTop = 0;
+}
+
+const brandHome = document.getElementById("brandHome");
+if (brandHome) {
+  brandHome.addEventListener("click", resetToStart);
+  brandHome.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      resetToStart();
+    }
+  });
+}
 
 // ===========================================================================
 // Plant Ontology Explorer -- a persistent, always-browsable force-directed
@@ -900,7 +994,8 @@ const graphState = {
   edges: [], // { source, target, type, el, pathEl, hitEl }
   zoom: 1,
   pan: { x: 0, y: 0 },
-  selectedId: null,
+  selectedId: null, // pinned graph node (Reasoning Walk)
+  pinnedType: null, // pinned schema type {label, count} (Ontology Overview)
   canvasWidth: 1200,
   canvasHeight: 900,
   // The Reasoning Walk view never shows the whole plant graph: only nodes in
@@ -1005,14 +1100,55 @@ function applyWalkVisibility() {
   });
 }
 
+// When true, the scoped layout has already been computed for the walk's FULL
+// node set, so per-step reveals must not re-lay-it-out (that would shuffle
+// every node on each of a 122-step walk). Set by animateGraphWalk, which
+// knows all its steps up front; left false for the live agentic path, which
+// learns nodes batch by batch and so re-lays-out as it grows.
+let walkLayoutLocked = false;
+
+// Pre-lay-out the union of every node a known-in-advance walk will touch and
+// frame the camera on that full extent ONCE, then freeze both (see
+// walkLayoutLocked). The result is a completely static stage the walk lights
+// up step by step -- no drifting zoom, no nodes sliding around.
+function lockWalkLayoutFor(steps, panel) {
+  const allIds = new Set();
+  (steps || []).forEach((s) => (s.node_ids || []).forEach((id) => allIds.add(id)));
+  if (panel && panel.entity_id) allIds.add(panel.entity_id);
+  // Anything already on screen must be laid out and framed too. A settled
+  // answer reveals nodes that no walk STEP touched -- notably the process-flow
+  // neighbours from `panel.relationships` (e.g. Heat Exchanger 101 for a P-101
+  // answer). Laying out only the step nodes left those stranded at their old
+  // positions while the pump moved out from under them.
+  graphState.revealedIds.forEach((id) => allIds.add(id));
+  if (allIds.size === 0) return;
+  assignScopedLayout(allIds);
+  fitScopedView(allIds);
+  walkLayoutLocked = true;
+}
+
 // Adds nodes to the revealed scope and refreshes visibility + the floating
 // chrome/hint in one go -- every walk path (live SSE, post-hoc replay, final
 // focus) funnels through this.
+//
+// It also (re)applies the tidy scoped layout and refits the viewport AS THE
+// WALK GROWS, not just when it settles. Without this the walk animated over
+// the nodes' original whole-plant force-layout positions -- sprawling,
+// overlapping labels, and routinely half off-screen because each step also
+// panned to a single node. Now every step shows a fully-framed subgraph.
 function revealNodes(ids) {
   ids.forEach((id) => {
     if (graphState.nodesById.has(id)) graphState.revealedIds.add(id);
   });
   applyWalkVisibility();
+  // While the layout is locked the camera is already framed on the walk's
+  // FULL node set (see lockWalkLayoutFor), so neither the positions nor the
+  // zoom/pan change per step -- nodes simply light up in place. Re-fitting
+  // here is what used to make the graph lurch on every play/step click.
+  if (!walkLayoutLocked) {
+    assignScopedLayout(graphState.revealedIds);
+    fitScopedView();
+  }
   applyWalkUiState();
   updateWalkChrome();
 }
@@ -1021,6 +1157,7 @@ function revealNodes(ids) {
 // returns to its empty state until the new question's first step arrives.
 function resetWalkScope() {
   graphState.revealedIds.clear();
+  walkLayoutLocked = false;
   applyWalkVisibility();
   applyWalkUiState();
   updateWalkChrome();
@@ -1062,15 +1199,24 @@ function hideInspector() {
 
 function unpinInspector() {
   graphState.selectedId = null;
+  graphState.pinnedType = null;
   const priorSelected = plantGraph.querySelector(".node.selected");
   if (priorSelected) priorSelected.classList.remove("selected");
+  viewOverview.querySelectorAll(".overview-node.selected").forEach((n) => n.classList.remove("selected"));
   hideInspector();
 }
 
-// Pointer left a node (or the viewport): fall back to the pinned node if
-// there is one, otherwise dismiss entirely.
+// Pointer left a node (or the viewport): fall back to whatever is pinned on
+// the ACTIVE tab, otherwise dismiss entirely. Tab-aware because the two views
+// pin different things -- a graph node id vs a schema type -- and restoring
+// the wrong one would strand an unrelated panel on screen.
 function hideInspectorPreview() {
-  if (graphState.selectedId && graphState.nodesById.has(graphState.selectedId)) {
+  if (viewOverview.classList.contains("active")) {
+    if (graphState.pinnedType) {
+      renderTypeInspector(graphState.pinnedType.label, graphState.pinnedType.count, { pinned: true });
+      return;
+    }
+  } else if (graphState.selectedId && graphState.nodesById.has(graphState.selectedId)) {
     renderInspector(graphState.nodesById.get(graphState.selectedId), { pinned: true });
     return;
   }
@@ -1081,7 +1227,26 @@ function hideInspectorPreview() {
 // swallow a node's own mouseleave, which is what left the panel stranded.
 // Leaving the viewport always clears an unpinned preview.
 graphViewport.addEventListener("mouseleave", () => {
-  if (!graphState.selectedId) hideInspector();
+  if (!graphState.selectedId && !graphState.pinnedType) hideInspector();
+});
+
+// Clicking empty canvas dismisses a pinned panel -- the same "click away to
+// close" reflex the ✕ serves, without having to aim for it. Suppressed after a
+// drag-pan, which also ends in a click but isn't a dismiss gesture.
+graphViewport.addEventListener("click", (e) => {
+  if (canvasDidDrag) return;
+  if (!graphState.selectedId && !graphState.pinnedType) return;
+  if (
+    e.target.closest(".graph-node") ||
+    e.target.closest(".overview-node") ||
+    e.target.closest("#inspector") ||
+    e.target.closest("#reasoningTrace") ||
+    e.target.closest(".zoom-stack") ||
+    e.target.closest(".graph-legend")
+  ) {
+    return;
+  }
+  unpinInspector();
 });
 
 function renderInspector(node, { pinned = false } = {}) {
@@ -1373,8 +1538,11 @@ function assignScopedLayout(nodeIds) {
       const capacity = Math.max(5, Math.floor(((totalArc / 360) * 2 * Math.PI * radius) / spacingPx));
       const items = remaining.slice(0, capacity);
       remaining = remaining.slice(capacity);
+      // Alternate rings are offset by half a step so ring 1's labels don't
+      // land directly outside ring 0's and collide.
+      const ringOffset = ring % 2 === 0 ? 0.5 : 1.0;
       items.forEach((o, j) => {
-        let deg = ((j + 0.5) / items.length) * totalArc;
+        let deg = ((j + ringOffset) / items.length) * totalArc;
         for (const [a, b] of arcs) {
           const span = b - a;
           if (deg <= span) {
@@ -1436,19 +1604,29 @@ function assignScopedLayout(nodeIds) {
     n.y += offsetY;
     n.el.setAttribute("transform", `translate(${n.x} ${n.y})`);
   });
+  // Re-path EVERY edge, not just those with both endpoints in `idSet`. An edge
+  // whose endpoints moved but which was skipped here keeps its old geometry and
+  // visibly detaches from its own nodes -- that's what broke the
+  // Crude Charge Pump 101 -> Heat Exchanger 101 link on replay (the exchanger
+  // was revealed by the answer's `relationships`, so it was on screen, but it
+  // isn't in any walk STEP, so it fell outside the replay's layout set).
+  // Recomputing all ~160 paths is trivially cheap and makes staleness
+  // impossible by construction.
   graphState.edges.forEach((edge) => {
-    if (idSet.has(edge.source) && idSet.has(edge.target)) {
-      const d = curvedEdgePath(graphState.nodesById.get(edge.source), graphState.nodesById.get(edge.target));
-      edge.pathEl.setAttribute("d", d);
-      edge.hitEl.setAttribute("d", d);
-    }
+    const from = graphState.nodesById.get(edge.source);
+    const to = graphState.nodesById.get(edge.target);
+    if (!from || !to) return;
+    const d = curvedEdgePath(from, to);
+    edge.pathEl.setAttribute("d", d);
+    edge.hitEl.setAttribute("d", d);
   });
 }
 
 // Zoom/pan the walk viewport so the entire scoped subgraph is visible with
 // padding -- called when an answer settles (and by the ⤢ fit button).
-function fitScopedView() {
-  const nodes = graphState.nodes.filter((n) => graphState.revealedIds.has(n.id));
+function fitScopedView(idSet) {
+  const ids = idSet || graphState.revealedIds;
+  const nodes = graphState.nodes.filter((n) => ids.has(n.id));
   if (nodes.length === 0) return;
   const pad = 90;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -1462,7 +1640,11 @@ function fitScopedView() {
   const viewportH = graphViewport.clientHeight || 420;
   const w = maxX - minX + pad * 2;
   const h = maxY - minY + pad * 2;
-  graphState.zoom = Math.min(1, Math.max(0.4, Math.min(viewportW / w, viewportH / h)));
+  // Allowed to magnify up to 1.6x: a 5-node answer used to render tiny in the
+  // middle of a large empty pane (capped at 1.0), which is a big part of why
+  // labels were hard to read. Floor 0.3 so even the widest subgraph still
+  // fits rather than clipping.
+  graphState.zoom = Math.min(1.6, Math.max(0.3, Math.min(viewportW / w, viewportH / h)));
   graphState.pan.x = viewportW / 2 - ((minX + maxX) / 2) * graphState.zoom;
   graphState.pan.y = viewportH / 2 - ((minY + maxY) / 2) * graphState.zoom;
   updateGraphTransform();
@@ -1490,13 +1672,22 @@ function computeCitedIds(panel) {
   (panel.charts || []).forEach((c) => {
     if (c.tag) cited.add(c.tag);
   });
+  let namedRecords = 0;
   graphState.revealedIds.forEach((id) => {
     const node = graphState.nodesById.get(id);
     if (!node) return;
-    if (node.label === "Asset" || (lastAnswerText && lastAnswerText.includes(id))) {
+    if (node.label === "Asset") {
       cited.add(id);
+    } else if (lastAnswerText && lastAnswerText.includes(id)) {
+      cited.add(id);
+      namedRecords++;
     }
   });
+  // If the answer named no records at all (e.g. "show me everything about
+  // X", whose prose reports counts rather than ids), then every revealed
+  // record IS the answer -- dimming the whole subgraph would wrongly say
+  // "none of this matters".
+  if (namedRecords === 0) graphState.revealedIds.forEach((id) => cited.add(id));
   return cited;
 }
 
@@ -1521,8 +1712,11 @@ function focusAnswerInGraph(panel) {
     });
   });
 
+  // Settling adds nodes the walk itself never stepped on (cited records'
+  // parent assets), so release the frozen walk layout and lay out the final
+  // set.
+  walkLayoutLocked = false;
   revealNodes(refs);
-  assignScopedLayout(graphState.revealedIds);
 
   // Visual hierarchy: red for the backbone + evidence the answer names;
   // quiet ".context" for everything else the reasoning merely touched.
@@ -1607,6 +1801,8 @@ function animateGraphWalk(panel) {
   showWalkTab();
   clearHighlight();
 
+  lockWalkLayoutFor(steps, panel);
+
   function playStep(i) {
     if (i > 0) {
       // Demote the previous step's nodes/edges from "current" to a
@@ -1646,7 +1842,9 @@ function animateGraphWalk(panel) {
     graphState.edges.forEach((edge) => {
       if (ids.includes(edge.source) && ids.includes(edge.target)) edge.el.classList.add("walk-current");
     });
-    if (ids.length > 0) panToNode(ids[0]);
+    // No per-step panToNode: revealNodes() already refits the viewport to the
+    // whole scoped subgraph, and re-centring on one node was what pushed the
+    // rest of the walk off-screen mid-animation.
 
     setTimeout(() => playStep(i + 1), walkStepDelay(steps.length));
   }
@@ -1689,7 +1887,9 @@ function liveWalkStep(step) {
   graphState.edges.forEach((edge) => {
     if (ids.includes(edge.source) && ids.includes(edge.target)) edge.el.classList.add("walk-current");
   });
-  panToNode(ids[0]);
+  // No per-step panToNode: revealNodes() already refits the viewport to the
+  // whole scoped subgraph, and re-centring on one node was what pushed the
+  // rest of the walk off-screen mid-animation.
   if (step.label) {
     logTraceLine(step.label);
   }
@@ -1766,7 +1966,8 @@ function applyReplayStep(i) {
   graphState.edges.forEach((edge) => {
     if (ids.includes(edge.source) && ids.includes(edge.target)) edge.el.classList.add("walk-current");
   });
-  if (ids.length > 0) panToNode(ids[0]);
+  // See the note in animateGraphWalk: revealNodes() keeps the whole scoped
+  // subgraph framed, so no per-step re-centring.
   logTraceLine(step.label);
 }
 
@@ -1782,6 +1983,7 @@ tracePlayBtn.addEventListener("click", () => {
   }
   clearHighlight();
   showWalkTab();
+  lockWalkLayoutFor(lastWalkSteps, lastPanel); // stable positions across the replay
   setPlayIcon(true);
   replayTimer = setInterval(() => {
     replayIndex++;
@@ -1799,6 +2001,7 @@ traceStepBtn.addEventListener("click", () => {
     clearHighlight();
   }
   showWalkTab();
+  lockWalkLayoutFor(lastWalkSteps, lastPanel);
   replayIndex++;
   applyReplayStep(replayIndex);
 });
@@ -1889,45 +2092,113 @@ const OVERVIEW_LAYOUT = [
   { label: "HistorianTag", edgeType: "HAS_HISTORIAN_TAG", x: 92, y: 205 },
 ];
 
-function renderTypeInspector(label, count) {
+// Per-type instance ids + the relation each type hangs off, indexed once when
+// the schema view renders. This is what gives the type inspector enough
+// content to be worth pinning and scrolling: "AlarmEvent, 126 instances, via
+// HAS_ALARM, e.g. AME-000001 …".
+const overviewTypeIndex = new Map(); // label -> { ids: [...], relation, linkCount }
+
+// How many instance ids a pinned type panel lists before saying "+N more".
+const TYPE_INSTANCE_LIMIT = 40;
+
+function renderTypeInspector(label, count, { pinned = false } = {}) {
   inspector.classList.add("show");
-  inspector.classList.remove("pinned"); // schema-type peek is always transient
+  inspector.classList.toggle("pinned", pinned);
   inspector.innerHTML = "";
+  if (pinned) {
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "inspector-close";
+    close.setAttribute("aria-label", "Close inspector");
+    close.textContent = "✕";
+    close.addEventListener("click", (e) => {
+      e.stopPropagation();
+      unpinInspector();
+    });
+    inspector.appendChild(close);
+  }
+  const body = document.createElement("div");
+  body.className = "inspector-body";
+  inspector.appendChild(body);
+
   const title = document.createElement("p");
   title.className = "inspector-title";
   title.textContent = label;
-  inspector.appendChild(title);
+  body.appendChild(title);
   const sub = document.createElement("p");
   sub.className = "muted";
   sub.textContent = `Type node · ${count} instance${count === 1 ? "" : "s"}`;
-  inspector.appendChild(sub);
+  body.appendChild(sub);
+
   const info = OVERVIEW_TYPE_INFO[label];
+  const indexed = overviewTypeIndex.get(label);
+  const table = document.createElement("dl");
+  table.className = "inspector-fields";
+  const addRow = (key, value) => {
+    if (!value) return;
+    const dt = document.createElement("dt");
+    dt.textContent = key;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    table.append(dt, dd);
+  };
   if (info) {
-    const table = document.createElement("dl");
-    table.className = "inspector-fields";
-    const dt1 = document.createElement("dt");
-    dt1.textContent = "source system";
-    const dd1 = document.createElement("dd");
-    dd1.textContent = info.source;
-    const dt2 = document.createElement("dt");
-    dt2.textContent = "fields";
-    const dd2 = document.createElement("dd");
-    dd2.textContent = info.fields;
-    table.append(dt1, dd1, dt2, dd2);
-    if (info.relations) {
-      const dt3 = document.createElement("dt");
-      dt3.textContent = "relations";
-      const dd3 = document.createElement("dd");
-      dd3.textContent = info.relations;
-      table.append(dt3, dd3);
-    }
-    inspector.appendChild(table);
+    addRow("source system", info.source);
+    addRow("fields", info.fields);
+    addRow("relations", info.relations);
   }
+  if (indexed && indexed.relation) {
+    addRow(
+      "connected via",
+      `${indexed.relation} (${indexed.linkCount} link${indexed.linkCount === 1 ? "" : "s"})`
+    );
+  }
+  if (table.childElementCount) body.appendChild(table);
+
+  // Instance ids -- only on a pinned panel. A hover peek stays short (it's a
+  // glance, and it must not grow tall enough to cover the diagram); pinning
+  // is the deliberate "show me more" action, so that's where the list lives.
+  if (pinned && indexed && indexed.ids.length) {
+    const listTitle = document.createElement("p");
+    listTitle.className = "inspector-subtitle";
+    listTitle.textContent = `Instances (${indexed.ids.length})`;
+    body.appendChild(listTitle);
+    const list = document.createElement("ul");
+    list.className = "inspector-alias-list inspector-instance-list";
+    indexed.ids.slice(0, TYPE_INSTANCE_LIMIT).forEach((id) => {
+      const li = document.createElement("li");
+      li.textContent = id;
+      list.appendChild(li);
+    });
+    body.appendChild(list);
+    if (indexed.ids.length > TYPE_INSTANCE_LIMIT) {
+      const more = document.createElement("p");
+      more.className = "insp-more muted";
+      more.textContent = `+${indexed.ids.length - TYPE_INSTANCE_LIMIT} more`;
+      body.appendChild(more);
+    }
+  } else if (!pinned) {
+    const hint = document.createElement("p");
+    hint.className = "insp-more muted";
+    hint.textContent = "Click to pin and list instances";
+    body.appendChild(hint);
+  }
+}
+
+// Pinned schema-type node (the overview counterpart of pinInspector()).
+function pinTypeInspector(label, count) {
+  graphState.selectedId = null; // a type node isn't a graph node id
+  graphState.pinnedType = { label, count };
+  viewOverview.querySelectorAll(".overview-node.selected").forEach((n) => n.classList.remove("selected"));
+  const node = viewOverview.querySelector(`.overview-node[data-type="${label}"]`);
+  if (node) node.classList.add("selected");
+  renderTypeInspector(label, count, { pinned: true });
 }
 
 function overviewNode(cx, cy, r, color, label, count, labelInside = false) {
   const g = document.createElementNS(SVG_NS, "g");
   g.setAttribute("class", "overview-node");
+  g.setAttribute("data-type", label);
   g.setAttribute("transform", `translate(${cx} ${cy})`);
 
   const circle = document.createElementNS(SVG_NS, "circle");
@@ -1952,8 +2223,18 @@ function overviewNode(cx, cy, r, color, label, count, labelInside = false) {
   labelText.textContent = label;
   g.appendChild(labelText);
 
-  g.addEventListener("mouseenter", () => renderTypeInspector(label, count));
+  // Same two-mode inspector as the walk view: hover = transient peek that
+  // always dismisses, click = pinned panel with a ✕ that scrolls its own
+  // content.
+  g.addEventListener("mouseenter", () => {
+    if (graphState.pinnedType && graphState.pinnedType.label === label) return; // already pinned open
+    renderTypeInspector(label, count);
+  });
   g.addEventListener("mouseleave", () => hideInspectorPreview());
+  g.addEventListener("click", (e) => {
+    e.stopPropagation();
+    pinTypeInspector(label, count);
+  });
   return g;
 }
 
@@ -2034,6 +2315,30 @@ function renderOntologyOverview(rawNodes, rawEdges) {
   rawEdges.forEach((e) => {
     edgeCounts[e.type] = (edgeCounts[e.type] || 0) + 1;
   });
+
+  // Index each type's instance ids (sorted, so a pinned panel is stable) plus
+  // the relation it hangs off -- content for the type inspector.
+  overviewTypeIndex.clear();
+  rawNodes.forEach((n) => {
+    if (!overviewTypeIndex.has(n.label)) {
+      overviewTypeIndex.set(n.label, { ids: [], relation: null, linkCount: 0 });
+    }
+    overviewTypeIndex.get(n.label).ids.push(n.id);
+  });
+  overviewTypeIndex.forEach((entry) => entry.ids.sort());
+  OVERVIEW_LAYOUT.forEach((item) => {
+    const entry = overviewTypeIndex.get(item.label);
+    if (entry) {
+      entry.relation = item.edgeType;
+      entry.linkCount = edgeCounts[item.edgeType] || 0;
+    }
+  });
+  const assetEntry = overviewTypeIndex.get("Asset");
+  if (assetEntry) {
+    const topo = ["FEEDS", "COOLS", "SUPPLIES_UTILITY"].reduce((s, t) => s + (edgeCounts[t] || 0), 0);
+    assetEntry.relation = "FEEDS / COOLS / SUPPLIES_UTILITY";
+    assetEntry.linkCount = topo;
+  }
 
   viewOverview.innerHTML = "";
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -2202,6 +2507,20 @@ function truncateLabel(text, max = 22) {
   return text.length > max ? `${text.slice(0, max - 1)}\u2026` : text;
 }
 
+// Caption shown under a graph node -- deliberately shorter than
+// nodeLabelText() (which stays full-length for the inspector title and edge
+// tooltips). Historian tag ids share a long useless prefix
+// ("FAC1.UNIT100.CENTRIFUGAL_PUMP_101.") and differ only in their LAST
+// segment, so truncating from the end rendered four of a pump's tags as four
+// identical "FAC1.UNIT100.CENTRIFU\u2026" captions. Use the distinguishing
+// segment instead.
+function nodeShortLabel(node) {
+  if (node.label === "HistorianTag" && node.id.includes(".")) {
+    return node.id.split(".").pop();
+  }
+  return nodeLabelText(node);
+}
+
 async function loadPlantGraph() {
   let data;
   try {
@@ -2297,7 +2616,7 @@ async function loadPlantGraph() {
     const label = document.createElementNS(SVG_NS, "text");
     label.setAttribute("class", "node-label");
     label.setAttribute("y", String(r + 12));
-    label.textContent = truncateLabel(nodeLabelText(node));
+    label.textContent = truncateLabel(nodeShortLabel(node));
     el.appendChild(label);
 
     el.addEventListener("click", () => pinInspector(node.id));
@@ -2347,6 +2666,9 @@ async function loadPlantGraph() {
 // tab is active: the walk view's pixel-space CSS transform, or the overview's
 // viewBox-space group transform.
 let dragState = null;
+// Set while a canvas drag-pan is in progress so the trailing click isn't
+// mistaken for a "click empty canvas to dismiss the pinned panel" gesture.
+let canvasDidDrag = false;
 
 function overviewActive() {
   return viewOverview.classList.contains("active");
@@ -2389,11 +2711,15 @@ graphViewport.addEventListener("mousedown", (e) => {
   } else {
     dragState = { mode: "walk", startX: e.clientX, startY: e.clientY, panX: graphState.pan.x, panY: graphState.pan.y };
   }
+  canvasDidDrag = false;
   graphViewport.classList.add("grabbing");
 });
 
 window.addEventListener("mousemove", (e) => {
   if (!dragState) return;
+  if (Math.abs(e.clientX - dragState.startX) + Math.abs(e.clientY - dragState.startY) > 4) {
+    canvasDidDrag = true;
+  }
   if (dragState.mode === "overview") {
     const svg = viewOverview.querySelector("svg");
     if (!svg) return;

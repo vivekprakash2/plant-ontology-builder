@@ -22,8 +22,11 @@
 <body>
   <main class="app-shell">
     <header class="app-header">
-      <img class="brand-logo" src="/logo.png" alt="AskEllie">
-      <h1>AskEllie</h1>
+      <!-- Doubles as a "back to start" home button (see resetToStart()). -->
+      <div class="brand-home" id="brandHome" role="button" tabindex="0" title="Back to start">
+        <img class="brand-logo" src="/logo.png" alt="AskEllie">
+        <h1>AskEllie</h1>
+      </div>
       <div class="spacer"></div>
       <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light mode">☀️</button>
     </header>

@@ -99,6 +99,16 @@ Key per-handler details worth knowing:
   expected answer, but equally correct for P-102-vs-P-101: seal+setpoint vs cavitation); overlapping →
   "Partly — they share …"; either side without evidence → "Inconclusive" at low confidence. No scripted
   verdict anywhere.
+- `_answer_full_context` (the handbook's Q6 unification check): enumerates every record attached to the
+  asset. It must tag each one with `_describe_record()`'s type key via `_CONTEXT_LABEL_TO_TYPE`, **not**
+  the raw graph node label — passing `"AlarmEvent"` where `"alarm_event"` was expected silently dropped
+  *every* record from the panel timeline/evidence and from the graph walk, so the one question whose point
+  is "here's everything we unified across six systems" rendered as a bare sentence of counts with a 2-node
+  walk (fixed 2026-07-29; `tests/test_agent_dispatch.py` now asserts the panel's dated events span all
+  five transactional systems and the walk has ≥10 steps). `_CONTEXT_LABEL_TO_TYPE` is deliberately a
+  *superset* of `_RECORD_LABEL_TO_TYPE` — it adds `HistorianTag` so "show me everything" lists an asset's
+  tags, while diagnostic answers (which go through the base map) stay lean and show trends as charts
+  instead. A companion test guards that lean side too.
 - `_answer_alarm_flood`: **gated** on an actual flood signature (`_ALARM_FLOOD_MIN_TRANSITIONS = 15`; the
   planted TK-201 flood has 120 transitions, every genuine alarm in the data has ~3). Below the gate it
   reports the alarms as genuine — quantifying how far past the configured H limit the values actually went
@@ -248,7 +258,7 @@ model names.
 
 ## 3. HTTP layer (`server.py`)
 
-Stdlib-only (`http.server.HTTPServer`, single-threaded, no Flask/FastAPI) — binds `127.0.0.1:8000` only
+Stdlib-only (`http.server.ThreadingHTTPServer`, no Flask/FastAPI) — binds `127.0.0.1:8000` only
 (never `0.0.0.0`). Loads `unified_entities.json` + the graph once at startup via
 `ontology_builder.pipeline.load_or_build()` (cache-first, see [ONTOLOGY.md](ONTOLOGY.md) §caching), and
 warms up the LLM provider **on the main thread before serving requests** (mlx-lm's Metal init isn't safe to
@@ -295,6 +305,7 @@ that precede it):
   "raw_answer": null,
   "presented_by": "databricks-claude-opus-4-8",
   "confidence": "model-reasoned",
+  "truncated": false,
   "evidence": [ ... ],
   "panel": { "entity": ..., "entity_id": "ASSET-002", "relationships": [...], "timeline": [...], "evidence": [...], "charts": [...], "walk": [...] },
   "plan": [ {"text": "...", "status": "done"}, ... ]
@@ -409,9 +420,13 @@ text ultimately comes from live LLM output.
 - **`renderMarkdown(container, text)`**, `extractHeadline()`, `CONFIDENCE_SCORE`/`confidenceClass()`, and
   the Sensor Trend `<svg>` builder (`buildTrendChartSvg()`/`buildTrendChartCard()`) carry over from the
   first redesign, re-homed into each assistant bubble.
-- Each assistant card (`renderAssistantBubble()`): Ellie avatar (`/logo.png`) + name → headline + an
-  **outlined** confidence pill ("high confidence" / "AI-reasoned") → meta line (`asset: ... · 🤖 reasoned
-  by <model>` / `rule-based`) → then **all sections inline under uppercase `.section-label` headings, no
+- Each assistant card (`renderAssistantBubble()`): Ellie avatar (`/logo.png`) + name → headline → **one
+  row of provenance pills** (`.assistant-meta`): the resolved asset (red dot + name), the outlined
+  confidence pill, and a monospace model pill — `⚙ rule-based`, or `🤖 <model>` tinted violet
+  (`.meta-model.is-ai`) when a language model actually reasoned the answer, so the agentic path is
+  identifiable at a glance on stage. This replaced a muted run-on sentence (`asset: X · rule-based`) plus
+  a separately-wrapping confidence badge, which stacked into three ragged rows → then **all sections
+  inline under uppercase `.section-label` headings, no
   `<details>` dropdowns anywhere**, in the mockup's argument order: full analysis → "Evidence & timeline
   (N)" → "Recommended actions" → Sensor Trend charts → a dashed-underline "Focus `<entity>` in the
   explorer →" link.
@@ -422,6 +437,12 @@ text ultimately comes from live LLM output.
   first `TIMELINE_VISIBLE_LIMIT` (6) entries render visible; the rest sit behind a "Show all N records ▾"
   toggle — an alarm-flood answer cites 240+ records, which would otherwise swallow the thread.
 - User bubbles are neutral gray with a small timestamp; the old red-gradient bubble is gone.
+- **The AskEllie wordmark is a home button** (`#brandHome` → `resetToStart()`): aborts any in-flight
+  answer via `activeChatAbort` (an `AbortController`, which also closes the server's SSE stream), clears
+  the thread/history/trace/walk scope, re-renders the starter panel from the cached `starterQuestions`,
+  and returns to the Ontology Overview. Done client-side rather than as a reload so it's instant and
+  doesn't re-fetch + re-lay-out all 162 graph nodes. `AbortError` is swallowed in `submitQuestion`'s catch
+  — a deliberate cancel is not an error.
 - **Loading state**: a pending "Thinking..." bubble is appended immediately on submit and replaced in
   place — agentic answers can take 30–90+ seconds.
 - If `panel.entity_id` is present, the walk view auto-focuses that entity's evidence as soon as the answer
@@ -434,9 +455,14 @@ at one node per record type regardless of data volume: the `Asset` hub (count + 
 with one satellite per record type, radius scaled gently by record count (126 AlarmEvents visibly outweigh
 2 CostPostings), soft category-color fills. Every edge carries its relation name rotated along the line,
 plus a wide invisible hit-path driving an instant cursor tooltip ("Asset —HAS_ALARM→ AlarmEvent · 126
-links"). Hovering a node shows the type inspector (source system, fields, and for Asset the
-FEEDS/COOLS/SUPPLIES_UTILITY relations — the self-loop drawing was removed as clutter). Pan/zoom works
-here too via a `translate+scale` transform on the diagram's group in viewBox units.
+links"). The type inspector uses the **same two-mode interaction as the walk view**: hovering a type node shows a
+transient peek (source system, fields, relations, the relation it hangs off with a live link count — plus
+a "Click to pin and list instances" hint), and *clicking* pins it, which adds the scrolling list of that
+type's instance ids (`AME-000001` …, capped at 40 with a "+86 more" line) and rings the node. Backed by
+`overviewTypeIndex`, built once per render from the `/api/graph` payload. Listing instances only on the
+pinned panel is deliberate: a hover peek must stay short enough not to cover the diagram, and pinning is
+the explicit "show me more" action. Pan/zoom works here too via a `translate+scale` transform on the
+diagram's group in viewBox units.
 
 **Reasoning Walk** (`#plantGraph`) — never shows the whole plant. `graphState.revealedIds` is the single
 visibility gate: empty until a question is asked (empty-state hint; the trace panel/legend/zoom stack stay
@@ -447,6 +473,19 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
 - **Post-hoc** (deterministic mode, no live events): `animateGraphWalk(panel)` replays `panel.walk` step
   by step. Long walks fast-forward: >20 steps drop from 550ms to 110ms per step (`walkStepDelay()`), so
   TK-201's 122-step alarm-flood walk takes ~13s instead of ~67s (and renders as a striking radial burst).
+- **The tidy layout applies DURING the walk, not only at settle** (fixed 2026-07-29 after a demo-run
+  screenshot showed a mid-walk graph that was crowded, label-overlapped and half off-screen).
+  `revealNodes()` re-runs `assignScopedLayout()` + `fitScopedView()` on every reveal, so each step shows a
+  fully-framed subgraph; previously the animation played over the nodes' original *whole-plant* force
+  positions and each step additionally `panToNode`'d onto a single node, pushing the rest out of view.
+  Those per-step pans are gone — the fit keeps everything on screen instead.
+  - `walkLayoutLocked` + `lockWalkLayoutFor(steps, panel)`: the two replay paths know all their steps up
+    front, so they lay the **whole** union out once **and frame the camera on that full extent once**,
+    then freeze both. The result is a static stage the walk lights up step by step — no nodes sliding
+    around, no drifting zoom. (Re-fitting per reveal was what made the graph lurch on every play/step
+    click; `revealNodes()` now only re-lays-out/re-fits when the layout is *un*locked.) The live agentic
+    path stays unlocked — it learns nodes in batches over only a handful of steps — and re-fits as it
+    grows. `focusAnswerInGraph()`/`resetWalkScope()` release the lock.
 - Both paths settle into `focusAnswerInGraph(panel)`, which (redesigned 2026-07-29 after demo-run
   feedback that the settled view read as "random and overwhelming"):
   - **Lays the subgraph out deterministically** (`assignScopedLayout()`, replacing the old per-run force
@@ -458,6 +497,9 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   - **Applies a visual hierarchy** (`computeCitedIds()`): red `.highlighted` only for the asset backbone,
     the charted historian tags, and records the answer text names by id (e.g. "WO-4471"); everything else
     the reasoning merely touched gets quiet `.context` (45% opacity). Red edges only between cited nodes.
+    **Fallback**: if the answer named *no* record ids at all — true of "show me everything about X", whose
+    prose reports counts rather than ids — every revealed node counts as cited, since dimming the entire
+    subgraph would wrongly signal "none of this matters".
   - **Fits the viewport to the whole subgraph** (`fitScopedView()`, also behind the ⤢ button) instead of
     a 100% crop, rings the entity as the anchor, and no longer auto-pins the inspector over the graph
     (hover/click still opens it).
@@ -467,15 +509,27 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   (scoped to this answer)").
 - Node circles are tinted with their category color; hover thickens the stroke and shows the record
   inspector; walk edges get the same wide-hit-path cursor tooltip ("P-101 —FEEDS→ E-101").
+- **Label legibility**: captions are painted with a knockout halo in the canvas background color
+  (`paint-order: stroke`), so they stay readable where edges/dots run behind them, and use `--text-main`
+  rather than the muted gray. `fitScopedView()` may magnify up to **1.6x** (previously capped at 1.0,
+  which rendered a 5-node answer tiny in a large empty pane). `nodeShortLabel()` captions historian tags
+  by their distinguishing LAST segment (`VIB_01`) — truncating those 40-char ids from the end produced
+  four identical `FAC1.UNIT100.CENTRIFU…` captions on one pump; the inspector/tooltips still show the
+  full id.
 - **Zoom/fit** (shared stack, both tabs): +/− buttons, cursor-anchored wheel zoom, click-drag pan, and a
   ⤢ fit button (overview → natural framing; walk → re-center on the answer's entity at 100%).
 - **Light mode is the default theme** (switched from dark on 2026-07-29 — it reads better for the demo),
   same inline head-script/`applyTheme()` mechanism; a saved `localStorage.theme` still wins.
-- **Node inspector modes**: hovering a node is a *transient peek* — moving off it (or off the whole
-  viewport, or switching tabs) always dismisses it, so the panel can't sit stale over the canvas.
+- **Node inspector modes** (both tabs): hovering a node is a *transient peek* — moving off it (or off the
+  whole viewport, or switching tabs) always dismisses it, so the panel can't sit stale over the canvas.
   *Clicking* pins it: red border, a ✕ to dismiss, taller, and the content scrolls internally
-  (`.inspector.pinned .inspector-body`) so an asset with 15 connections is readable rather than clipped.
-  `.node.selected` now means "pinned by click"; the answer entity's dashed ring is `.node.anchor`.
+  (`.inspector.pinned .inspector-body`) so an asset with 15 connections — or a schema type with 126
+  instances — is readable rather than clipped. A pinned panel also dismisses on clicking empty canvas,
+  suppressed after a drag-pan via `canvasDidDrag` (a pan ends in a click too, but isn't a dismiss
+  gesture). The two views pin *different kinds of thing* — `graphState.selectedId` (a graph node id, walk
+  view) vs `graphState.pinnedType` (`{label, count}`, schema view) — so `hideInspectorPreview()` is
+  tab-aware; restoring the wrong one would strand an unrelated panel on screen. `.node.selected` /
+  `.overview-node.selected` mean "pinned by click"; the answer entity's dashed ring is `.node.anchor`.
 - **Edges stop at node boundaries** in both views rather than running center-to-center under the node
   fill: straight schema edges trim by each circle's radius + 2px, and the walk's quadratic curves trim
   along their end tangents (`trimToward()`, which points at the bezier control point).
@@ -489,6 +543,16 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
 
 ## 5. Quirks & gotchas (keep this section current)
 
+- **The server is threaded (`ThreadingHTTPServer`), and that's load-bearing.** It used to be a
+  single-threaded `HTTPServer` "on purpose" (mlx-lm's Metal init isn't thread-safe), but that meant an
+  open `/api/chat` SSE stream blocked *every* other request: a mid-answer page refresh hung until the
+  answer finished — measured **9.8s** on the fast rule-based path, and 30–90s on the agentic one, which
+  reads to a user as the app having crashed. Now threaded by default; it drops back to single-threaded
+  only when `LOCAL_LLM_PROVIDER=mlx` is explicitly set (that provider's native `SIGABRT` can't be caught,
+  which is why it's still warmed up on the main thread at startup). Shared state is read-only
+  (`_ENTITIES`/`_KG`), `historian_series()` opens its own file handle per call, and the text-generation
+  provider is stateless per request, so no locking is needed. Verified: `GET /api/graph` returns in 20ms
+  while a chat stream is open.
 - **The graph cache can silently carry an incomplete LLM-extracted topology.** `output/graph.json` is
   trusted verbatim by `load_or_build()`. A cache committed on 2026-07-28 had been built by the LLM
   topology extractor and was missing the **P-102 → Column reflux `FEEDS` edge** (plus all V-201 edges),
@@ -510,9 +574,23 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   `topology_extraction.py` had its own independent instance of this exact bug (fixed — exact-match-only for
   short codes) — see [ONTOLOGY.md](ONTOLOGY.md)/repo memory for that story if extending short-code matching
   anywhere in the chat path.
-- **`max_tokens` for the agentic loop has been raised twice** (1000 → 1600) after observing the model get
-  cut off mid-response before completing all required Markdown sections once the format grew from 2 to 3
-  headings. If a 4th required section is ever added, re-check this budget rather than assuming it still fits.
+- **Output truncation is now detected instead of silent.** `chat()` returns the API's `finish_reason` on
+  the message as `_finish_reason` (popped by `_run_agentic_events` before the message is appended back into
+  the conversation, so it's never echoed to the API). `finish_reason == "length"` triggers **one retry** at
+  `_ANSWER_RETRY_MAX_TOKENS` (3600); if that's still truncated the answer carries `truncated=True`, gets an
+  italic "this answer was cut off" note appended to its text, and the UI shows a `⚠ cut off` chip. This
+  closed a real defect found in a live retest: a Recommended Actions bullet ended mid-word
+  ("…to protect cr") and nothing in the stack knew — `_split_agent_response()` happily parsed the
+  half-written Markdown and the UI rendered it as a finished answer. `_ANSWER_MAX_TOKENS` also went
+  1000 → 1600 → **2400**. If a 4th required section is ever added, re-check both budgets.
+- **`get_related_assets` returning a neighbour is not evidence about that neighbour** — prompt rule **4a**
+  exists because of measured run-to-run variance on exactly this: in one live run the agent asked
+  "is K-101 the same problem as P-101?" (the handbook's S4 distractor), called `get_related_assets`, saw
+  CV-400 listed, never checked CV-400's own records/trend, and reported K-101's cause as *"unconfirmed"* —
+  while a different run of the same question named the stuck valve correctly. Rule 4a now requires pulling
+  a plausible neighbour's `get_asset_context`/`get_historian_trend` before concluding, and forbids
+  "unconfirmed" while a named related asset is unchecked. `_MAX_AGENT_TURNS` went 12 → 14 to pay for those
+  extra sequential calls.
 - **`_split_agent_response()` must never raise.** It's parsing free-form LLM text against a *requested but
   not enforced* format — a model that ignores the instructions should degrade to "everything in root_cause,
   headline/recommendation None", not crash the request. Any future change to the parsing regexes must

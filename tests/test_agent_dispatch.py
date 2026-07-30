@@ -26,6 +26,7 @@ from ontology_builder.agent import (
     _MAX_HISTORY_TURNS,
     _dispatch,
     _history_messages,
+    build_ui_panel,
 )
 from ontology_builder.pipeline import load_or_build
 
@@ -79,6 +80,32 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(a.scenario, "full_context")
         for system in ("AM=", "APM=", "CMMS=", "DCS=", "ERP=", "Historian="):
             self.assertIn(system, a.answer)
+        # A pure lookup gets no invented advice.
+        self.assertIsNone(a.recommendation)
+
+    def test_q6_panel_enumerates_records_from_every_system(self) -> None:
+        """The unification question's whole point is showing the records it
+        unified -- they were previously all dropped from the panel/walk
+        because evidence was tagged with raw node labels ("AlarmEvent")
+        instead of _describe_record's type keys ("alarm_event")."""
+        a = self.ask("Show me everything known about P-101 across all systems.")
+        panel = build_ui_panel(self.entities, self.kg, a)
+        self.assertGreaterEqual(len(panel["evidence"]), 10)
+        # Dated events must span all five transactional systems.
+        self.assertEqual(
+            {e["source"] for e in panel["timeline"]}, {"AM", "APM", "CMMS", "DCS", "ERP"}
+        )
+        # ...and the graph walk should light up that whole neighbourhood.
+        self.assertGreaterEqual(len(panel["walk"]), 10)
+
+    def test_diagnostic_answer_stays_lean(self) -> None:
+        """Guard the other side of the same change: a vibration answer must
+        NOT start listing every historian tag as an evidence card -- its
+        relevant trends already render as charts."""
+        a = self.ask("Why is Crude Charge Pump P-101 vibrating?")
+        panel = build_ui_panel(self.entities, self.kg, a)
+        self.assertLessEqual(len(panel["evidence"]), 6)
+        self.assertGreaterEqual(len(panel["charts"]), 1)
 
     def test_q7_maintenance_ops_join(self) -> None:
         a = self.ask(

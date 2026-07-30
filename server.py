@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import os
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 
 from ontology_builder.agent import stream_answer
@@ -202,10 +202,22 @@ class ChatHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     host, port = "127.0.0.1", 8000
-    # Single-threaded on purpose: the local language model (mlx-lm, if used) is warmed up on this main
-    # thread, and handling requests on other threads risks a Metal
-    # initialization crash. Fine for a local single-user demo server.
-    httpd = HTTPServer((host, port), ChatHandler)
+    # Threaded by default so an in-flight /api/chat SSE stream can't block
+    # every other request. A single-threaded server made a mid-answer page
+    # refresh hang for the REST OF THE ANSWER (measured: ~10s on the fast
+    # rule-based path, 30-90s on the agentic one) because it couldn't accept
+    # `GET /` until do_POST's streaming loop returned -- which reads as the
+    # app having crashed.
+    #
+    # The one exception is the opt-in local mlx-lm provider: its Metal
+    # initialization is not thread-safe (a native SIGABRT that Python can't
+    # catch), which is why it's warmed up on the main thread at startup. When
+    # that provider is explicitly selected, stay single-threaded.
+    use_mlx = os.environ.get("LOCAL_LLM_PROVIDER", "").strip().lower() == "mlx"
+    server_cls = HTTPServer if use_mlx else ThreadingHTTPServer
+    httpd = server_cls((host, port), ChatHandler)
+    if use_mlx:
+        print("LOCAL_LLM_PROVIDER=mlx -- serving single-threaded (Metal init is not thread-safe).")
     print(f"Serving on http://{host}:{port}/  (Ctrl+C to stop)")
     try:
         httpd.serve_forever()
