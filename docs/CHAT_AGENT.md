@@ -623,12 +623,23 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   General lesson: any instructional text embedded in data the model reads (not just the system prompt)
   should be phrased as a fact about the data, not a command to the model, or the model may echo it back
   verbatim as if narrating its own instruction-following.
+- **The imperative-wording rewrite above (previous bullet) introduced a real, separate bug**: the "more
+  reliable window" recommendation in `trend_note` used `max(others, key=lambda o: o["window_hours"])` --
+  the longest window among those NOT requested. When the model itself requested the 336h window directly
+  (as it should for a slow signal), `others` contained only the 48h entry, so the note told the model **the
+  48h reading was "more reliable"** -- exactly backwards. Caught via a user comparing a live S3 answer
+  against the handbook: the model correctly fetched P-102's suction pressure at 336h (falling -11.8%, the
+  textbook cavitation-risk signature), got told to trust the 48h reading instead (a misleadingly flat
+  +2.2%), and dismissed cavitation as "not the driver." Fixed to always reference `_LONG_WINDOW_HOURS`
+  (336) regardless of which side was requested -- see §7 for the full story and the companion rule 4c
+  (falling suction pressure is evidence FOR cavitation risk, not against it) added alongside it.
 - **Almost every unit test exercises the DETERMINISTIC path, not the agentic one.** A green 48/48 is not
   evidence that the live LLM path behaves — e.g. `test_q3_c101_differential_pressure_multihop` asserts the
-  word "cavitation" appears, which `_dispatch` guarantees but the live agent reliably does *not* say (it
-  consistently frames P-102's falling suction as a symptom of the E-101→H-101 chain rather than S3's
-  second cause, across every live run measured so far — this is still an open gap, not yet fixed the way
-  the CV-400/window-length one was). `TestHistorianTrendTool` and `TestDismissedTrendWarningDetection` are
+  word "cavitation" appears, which `_dispatch` guarantees but the live agent still does not reliably say
+  (a 2026-07-29 fix stopped it reasoning *backwards* about P-102's falling suction pressure — see §7 — but
+  2 fresh live runs after the fix still ranked it a secondary/unconfirmed factor rather than a full
+  co-equal cause, so this remains a real, if smaller, gap). `TestHistorianTrendTool` and
+  `TestDismissedTrendWarningDetection` are
   the few agentic-path-relevant tests, and both only exercise pure helper functions, not the live model.
   Treat agentic behaviour as verified only by a live retest (`demo_run/`), never by the suite alone.
 - **The Column/Compressor `C-101` code collision** (AM uses `C-101` as an alias for the compressor, DCS/
@@ -793,9 +804,28 @@ Not blocking for the current rubric, but relevant if this session extends the ch
     principle still write a final answer that ignores a corrective nudge on its retry turn too — the retry
     reduces but does not mathematically guarantee zero occurrences. Re-verify with a fresh live retest
     (multiple runs) before relying on this scenario's consistency for a demo.
-  - S3 (C-101 dP): the live agentic path has never (across every run measured so far) framed reflux pump
-    P-102's falling suction pressure as a genuine *contributing* cause (SCENARIO.md §5b's "cold feed **+**
-    reflux cavitation" dual cause) — it's always described as a downstream symptom of the E-101→H-101
-    chain, at most a forward-looking risk to "monitor for cavitation." This is unfixed; a similar
-    prompt-plus-deterministic-backstop approach (as used for S4) would be the natural next step if it needs
-    closing before a demo.
+  - S3 (C-101 dP): **root cause found and partially fixed 2026-07-29** — a user compared a live answer
+    against the handbook's expected "cold feed **+** reflux cavitation" dual cause and caught the model
+    reasoning backwards: *"Reflux pump P-102's suction pressure is not elevated (down ~12% over 14 days),
+    so a reflux/hydraulic upset is not the driver."* Falling suction pressure is the textbook NPSH-margin/
+    cavitation warning sign — evidence FOR the risk, not against it. Two causes, both fixed:
+    1. **A real bug in `_trend_with_comparison`'s `trend_note`** (introduced by an earlier same-day edit
+       that reworded the note away from imperative phrasing): the "more reliable window" recommendation
+       used `max(others, key=...)`, i.e. the longest window *among those NOT requested*. When the model
+       itself requested the 336h (long) window directly, `others` contained only the 48h entry, so the
+       note told the model **the 48h reading was "more reliable"** — backwards, and directly steered the
+       model toward P-102's misleadingly flat 48h reading (+2.2%) over its genuinely declining 336h one
+       (-11.8%). Fixed to always reference `_LONG_WINDOW_HOURS` (336) regardless of which side was
+       requested.
+    2. **Missing domain guidance**: added rule 4c to `_AGENT_SYSTEM_PROMPT` stating explicitly that falling
+       suction pressure is a cavitation-risk signal, not reassurance, and that "not elevated" must never be
+       reasoned as "ruled out."
+    **Live-reverified after both fixes**: the backwards "not the driver" framing is gone in 2/2 fresh runs
+    — one now writes "a slow decline worth watching, since a drooping reflux-pump suction could indicate a
+    falling drum level or reduced overhead condensation," treating it as a secondary contributor to weigh,
+    not something ruled out. Neither run yet reaches the handbook's full co-equal "cold feed + reflux
+    cavitation" framing (both still rank the E-101/H-101 fouling chain as dominant and treat P-102 as
+    secondary/unconfirmed, reasonably citing that no reflux *flow* tag exists to confirm cavitation
+    directly) — that calibration gap is a smaller, more defensible remaining issue than the earlier
+    backwards reasoning, and is left open; a deterministic backstop analogous to S4's could still be added
+    if a demo needs the model to assert cavitation more confidently.

@@ -224,13 +224,26 @@ def _trend_with_comparison(
             # version's imperative wording ("...before concluding that nothing is wrong") got
             # echoed back into user-facing answers as meta-commentary like "I checked the
             # longer window as instructed" (see docs/CHAT_AGENT.md and rule 9 above).
+            #
+            # BUG FIXED: the "more reliable" reference below must always be
+            # `_LONG_WINDOW_HOURS` (336h), NOT `longest['window_hours']`. `longest` is only
+            # the longest among `others` (windows OTHER than the one requested) -- when the
+            # model itself requests window_hours=336, `others` contains only the 48h entry,
+            # so `longest` was the 48h summary, and this sentence was recommending the SHORT
+            # window as "more reliable" -- backwards. Caught live: P-102's suction pressure
+            # (a fast-moving pressure signal, not one of the slow examples this sentence
+            # names) was requested at 336h, got told "the 48h reading is more reliable," and
+            # the model dismissed a genuine -11.8%/14-day decline (the textbook falling-NPSH
+            # cavitation signature) as "not the driver" using the short window's misleadingly
+            # flat +2.2%. The comparison clause below (which window read what) is unaffected
+            # -- it's accurate regardless of which side was requested.
             requested["trend_note"] = (
                 f"WINDOW MATTERS for this tag: over {requested['window_hours']}h it reads "
                 f"'{requested['direction']}' ({requested['pct_change']:+.1f}%), but over "
                 f"{longest['window_hours']}h it reads '{longest['direction']}' "
                 f"({longest['pct_change']:+.1f}%). A signal that rose and then plateaued looks "
                 f"flat in a short window, so for slow-moving signals (lube-oil temperature, "
-                f"exchanger fouling, bearing temperature) the {longest['window_hours']}h reading "
+                f"exchanger fouling, bearing temperature) the {_LONG_WINDOW_HOURS}h reading "
                 "is the more reliable one."
             )
     return requested
@@ -928,6 +941,12 @@ _AGENT_SYSTEM_PROMPT = (
     "candidate root cause FOR THAT ASSET in its own right, not automatically just a downstream "
     "symptom of some other cause -- weigh it against the alternative explanations using the actual "
     "evidence, don't dismiss it by default just because another plausible cause is also present.\n"
+    "4c. Mind the DIRECTION of evidence for pressure/flow signals, not just whether they moved: a "
+    "pump's own suction pressure FALLING over time is the textbook NPSH-margin/cavitation warning "
+    "sign (it's approaching the fluid's vapor pressure) -- that is evidence FOR cavitation risk, "
+    "not against it. Never reason 'suction pressure is not elevated / is falling, so cavitation is "
+    "ruled out' -- a falling reading should raise your suspicion of it as a contributing cause, not "
+    "lower it. (Rising or stable suction pressure is the reassuring direction.)\n"
     "5. get_historian_trend ALWAYS returns both a 48-hour and a 336-hour (14-day) view -- the "
     "window you asked for at the top level, the other under 'other_windows'. Read both before "
     "concluding. When they disagree the result includes a 'trend_note': a signal that rose and "
