@@ -607,7 +607,23 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   retry's shape (bounded, deterministic, falls back to the original answer if the model doesn't produce a
   clean revision). Covered by `TestDismissedTrendWarningDetection` (offline, pure-function tests of the
   detector itself — the corrective retry's live effect still needs a real-LLM retest to confirm).
-- **Almost every unit test exercises the DETERMINISTIC path, not the agentic one.** A green 41/41 is not
+- **Imperative wording in tool results/prompts can leak into the user-facing answer as meta-commentary.** A
+  user caught a live answer that read *"I checked the longer window as instructed, and it does not change
+  the conclusion"* — traced this down and confirmed `_find_dismissed_trend_warnings()`'s corrective retry
+  (above) did NOT fire for it (the answer only used the "P-101" shorthand, which isn't among that asset's
+  resolved aliases, so the detector's asset-name check never matched). The real cause was simpler: the
+  `trend_note` text itself used to end with a second-person command ("...before concluding that nothing is
+  wrong"), and rule 5 similarly says "read both before concluding" — the model was narrating its own
+  compliance with that instruction rather than just stating the finding. Fixed two ways: (1) reworded
+  `trend_note` to be descriptive ("the {N}h reading is the more reliable one") instead of imperative, and
+  (2) added rule 9 to `_AGENT_SYSTEM_PROMPT` explicitly forbidding phrases like "as instructed"/"per the
+  note above"/"I double-checked as required" — write findings directly, not narration of the review
+  process. The corrective-retry nudge's own wording was also softened to ask for a "normal, self-contained
+  answer" instead of "explain why", since that phrasing could invite the same leak if the retry does fire.
+  General lesson: any instructional text embedded in data the model reads (not just the system prompt)
+  should be phrased as a fact about the data, not a command to the model, or the model may echo it back
+  verbatim as if narrating its own instruction-following.
+- **Almost every unit test exercises the DETERMINISTIC path, not the agentic one.** A green 48/48 is not
   evidence that the live LLM path behaves — e.g. `test_q3_c101_differential_pressure_multihop` asserts the
   word "cavitation" appears, which `_dispatch` guarantees but the live agent reliably does *not* say (it
   consistently frames P-102's falling suction as a symptom of the E-101→H-101 chain rather than S3's

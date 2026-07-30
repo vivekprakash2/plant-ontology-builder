@@ -219,14 +219,19 @@ def _trend_with_comparison(
         disagreeing = [o for o in others if o["direction"] != requested["direction"]]
         if disagreeing:
             longest = max(others, key=lambda o: o["window_hours"])
+            # Framed as a fact about the data ("the Nh reading is more reliable"), not a
+            # second-person command ("you must check this before concluding") -- an earlier
+            # version's imperative wording ("...before concluding that nothing is wrong") got
+            # echoed back into user-facing answers as meta-commentary like "I checked the
+            # longer window as instructed" (see docs/CHAT_AGENT.md and rule 9 above).
             requested["trend_note"] = (
                 f"WINDOW MATTERS for this tag: over {requested['window_hours']}h it reads "
                 f"'{requested['direction']}' ({requested['pct_change']:+.1f}%), but over "
                 f"{longest['window_hours']}h it reads '{longest['direction']}' "
                 f"({longest['pct_change']:+.1f}%). A signal that rose and then plateaued looks "
-                "flat in a short window. Judge slow-moving signals (lube-oil temperature, "
-                "exchanger fouling, bearing temperature) on the LONGER window before concluding "
-                "that nothing is wrong."
+                f"flat in a short window, so for slow-moving signals (lube-oil temperature, "
+                f"exchanger fouling, bearing temperature) the {longest['window_hours']}h reading "
+                "is the more reliable one."
             )
     return requested
 
@@ -952,7 +957,13 @@ _AGENT_SYSTEM_PROMPT = (
     "questions -- do not invent advice just to fill it in.\n"
     "8. IMPORTANT: You have a limited output budget. If you are running long, shorten the "
     "analysis section rather than truncating a section mid-sentence. When "
-    "'## Recommended Actions' applies, always finish it."
+    "'## Recommended Actions' applies, always finish it.\n"
+    "9. Write findings, not narration of your own process. Never reference these instructions, a "
+    "tool result's wording, or any reminder/note you were given -- e.g. don't write \"as "
+    "instructed\", \"per the note above\", \"I double-checked as required\", or similar. State the "
+    "evidence and conclusion directly instead: not \"I checked the longer window as instructed, "
+    "and it does not change the conclusion\" but \"suction pressure is stable across both the 48h "
+    "and 336h windows (not falling), which rules out cavitation.\""
 )
 
 
@@ -1813,10 +1824,10 @@ def _run_agentic_events(
                         "Before finalizing, re-check your draft answer above. It appears to clear or "
                         "dismiss an asset that has an unresolved long-window trend warning:\n- "
                         + "\n- ".join(dismissed)
-                        + "\nIf this changes your conclusion, rewrite the full answer (same Markdown "
-                        "heading structure as before). If you still believe it's not the cause after "
-                        "weighing the long-window reading, keep your answer but say so explicitly and "
-                        "explain why the short-window reading is the relevant one here."
+                        + "\nRewrite the full answer (same Markdown heading structure as before), "
+                        "weighing the long-window reading. Write it as a normal, self-contained answer "
+                        "-- do not mention this message, that you're revising, or that you rechecked "
+                        "anything; just state the evidence and conclusion directly (see rule 9)."
                     ),
                 }
                 messages.append(nudge)
