@@ -1,9 +1,10 @@
-"""Regression tests for the deterministic reasoning fallback (`_dispatch`).
+"""Regression tests for the reasoning agent -- both answer paths.
 
-Covers the 7 demo questions from docs/TEAM_HANDBOOK.md §7 (scenarios S1-S5 +
-unification + cross-app join) AND the variant phrasings that previously
-produced confidently wrong answers -- the handlers must derive conclusions
-from graph evidence, never from a per-scenario script:
+**Deterministic fallback (`_dispatch`).** The 7 demo questions from
+docs/TEAM_HANDBOOK.md §7 (scenarios S1-S5 + unification + cross-app join) AND
+the variant phrasings that previously produced confidently wrong answers --
+the handlers must derive conclusions from graph evidence, never from a
+per-scenario script:
 
   - "Why are there so many alarms on P-101?" must NOT get S5's nuisance
     verdict (P-101's 3 alarms are real vibration excursions).
@@ -12,21 +13,39 @@ from graph evidence, never from a per-scenario script:
   - "Why is the compressor vibrating?" must find K-101's actual cause
     (upstream cooling problem overheating the lube oil), not "no clear cause".
 
-Runs entirely offline (no LLM needed -- `_dispatch` is the no-LLM path).
+**Agentic path.** Live retests kept finding the same class of failure -- the
+agent concluding about an asset it hadn't properly examined -- so the guards
+against it are tested here too, via pure functions and a scripted fake
+provider. They cover three distinct stages of that failure:
+
+  - `TestHistorianTrendTool` -- never let the model see only the misleading
+    window (K-101's lube oil is "stable" over 48h, "+32%" over 336h).
+  - `TestCompletionGate` -- refuse an answer that claims something about a
+    related asset the agent never queried at all.
+  - `TestDismissedTrendWarningDetection` -- catch the answer that DID query it,
+    was handed the long-window warning, and dismissed it anyway.
+
+Everything here runs entirely offline: `_dispatch` is the no-LLM path, and the
+agentic tests drive pure functions or a scripted provider. Note the corollary
+recorded in docs/CHAT_AGENT.md §5 -- a green suite still is not evidence that a
+live model behaves, only that these mechanisms do.
 
 Run with:
     python -m unittest discover -s tests -v
 """
 from __future__ import annotations
 
+import json
 import unittest
 
 from ontology_builder.agent import (
     _MAX_HISTORY_CHARS,
     _MAX_HISTORY_TURNS,
+    _asset_mention_terms,
     _dispatch,
     _find_dismissed_trend_warnings,
     _history_messages,
+    _run_agentic_events,
     _tag_owner_aliases,
     _tool_get_historian_trend,
     _trend_result_for_llm,
@@ -290,6 +309,116 @@ class TestDismissedTrendWarningDetection(unittest.TestCase):
         trace = [{"tool": "get_historian_trend", "arguments": {"tag": trend["tag"]}, "result": trend}]
         content = "Crude Charge Pump 101's vibration is not implicated in anything else."
         self.assertEqual(_find_dismissed_trend_warnings(trace, self.kg, self.entities, content), [])
+
+
+class TestCompletionGate(unittest.TestCase):
+    """The agentic loop must refuse a final answer that makes a claim about a
+    related asset it never queried.
+
+    Driven by a scripted fake provider, so this tests real agentic-path code
+    with no LLM. The failure it guards against was measured live: the agent
+    called `get_related_assets(K-101)`, saw cooling valve CV-400 listed, never
+    queried it, then asserted "its cooling-water supplier CV-400 is not
+    implicated" -- contradicting CV-400's OPEN corrective work order WO-4530.
+    """
+
+    BAD = (
+        "## Headline\nNo -- different problems\n\n## Root Cause\nK-101 vibration rose ~125% but "
+        "its lube-oil temp is stable and its cooling-water supplier CV-400 is not implicated.\n\n"
+        "## Recommended Actions\n- Inspect K-101"
+    )
+    GOOD = (
+        "## Headline\nNo -- K-101 is a cooling problem\n\n## Root Cause\nCV-400 has an open work "
+        "order WO-4530 and cooling-water flow is down 14%.\n\n## Recommended Actions\n- Expedite WO-4530"
+    )
+    NO_MENTION = (
+        "## Headline\nNo -- different problems\n\n## Root Cause\nP-101 is seal-driven; K-101 shows "
+        "a bearing signature.\n\n## Recommended Actions\n- Inspect K-101 bearings"
+    )
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.entities, cls.kg = load_or_build()
+
+    @staticmethod
+    def _call(name, args):
+        return {"id": "1", "function": {"name": name, "arguments": json.dumps(args)}}
+
+    def _run(self, script):
+        """Returns (gate_event_count, final_answer)."""
+
+        class Scripted:
+            model = "fake-model"
+
+            def __init__(self, steps):
+                self.steps = list(steps)
+
+            def chat(self, messages, tools=None, max_tokens=600):
+                return self.steps.pop(0) if self.steps else {"role": "assistant", "content": "## Headline\nx"}
+
+        events = list(_run_agentic_events("is K-101 the same as P-101?", self.entities, self.kg, Scripted(script)))
+        gates = [e for e in events if e["type"] == "gate"]
+        final = next(e for e in events if e["type"] == "final")["answer"]
+        return len(gates), final
+
+    def _saw_related(self):
+        return {"role": "assistant", "tool_calls": [self._call("get_related_assets", {"unified_id": "ASSET-001"})]}
+
+    def test_claim_about_unexamined_neighbour_is_rejected_then_retried(self) -> None:
+        gates, final = self._run([self._saw_related(),
+                                  {"role": "assistant", "content": self.BAD},
+                                  {"role": "assistant", "content": self.GOOD}])
+        self.assertEqual(gates, 1)
+        self.assertIn("cooling", (final.headline or "").lower())  # the corrected answer won
+
+    def test_no_gate_when_the_neighbour_was_examined(self) -> None:
+        script = [
+            {"role": "assistant", "tool_calls": [
+                self._call("get_related_assets", {"unified_id": "ASSET-001"}),
+                self._call("get_asset_context", {"unified_id": "ASSET-004"}),
+            ]},
+            {"role": "assistant", "content": self.GOOD},
+        ]
+        self.assertEqual(self._run(script)[0], 0)
+
+    def test_no_gate_when_the_answer_ignores_the_neighbour(self) -> None:
+        """An agent may judge a branch irrelevant and simply not discuss it --
+        that must not be blocked, or the gate would fire on every answer."""
+        gates, _ = self._run([self._saw_related(), {"role": "assistant", "content": self.NO_MENTION}])
+        self.assertEqual(gates, 0)
+
+    def test_gate_on_giving_up_while_a_lead_is_open(self) -> None:
+        inconclusive = "## Headline\nInconclusive\n\n## Root Cause\nThe cause remains unclear."
+        gates, _ = self._run([self._saw_related(),
+                              {"role": "assistant", "content": inconclusive},
+                              {"role": "assistant", "content": self.GOOD}])
+        self.assertEqual(gates, 1)
+
+    def test_gate_fires_at_most_once(self) -> None:
+        """A stubborn model must not be able to burn the turn budget here."""
+        gates, final = self._run([self._saw_related(),
+                                  {"role": "assistant", "content": self.BAD},
+                                  {"role": "assistant", "content": self.BAD}])
+        self.assertEqual(gates, 1)
+        self.assertIsNotNone(final.headline)  # still returns an answer
+
+    def test_no_gate_without_any_discovered_neighbour(self) -> None:
+        script = [
+            {"role": "assistant", "tool_calls": [self._call("get_asset_context", {"unified_id": "ASSET-001"})]},
+            {"role": "assistant", "content": self.BAD},
+        ]
+        self.assertEqual(self._run(script)[0], 0)
+
+    def test_mention_terms_include_the_domain_code_not_just_canonical_name(self) -> None:
+        """CV-400 is neither ASSET-004's canonical name ("Boiler Feed Flow
+        Control Valve") nor any of its local ids, so matching on those alone
+        would miss the exact answer this gate exists to catch."""
+        terms = _asset_mention_terms(self.entities, "ASSET-004")
+        self.assertIn("cv-400", terms)
+        self.assertIn("boiler feed flow control valve", terms)
+        # ...and generic words must NOT be terms, or the gate would fire always.
+        self.assertNotIn("valve", terms)
+        self.assertNotIn("control valve", terms)
 
 
 class TestHistoryMessages(unittest.TestCase):

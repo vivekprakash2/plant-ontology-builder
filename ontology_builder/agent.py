@@ -1378,6 +1378,128 @@ def _primary_asset_id_from_trace(trace: list[dict[str, Any]]) -> Optional[str]:
     return None
 
 
+# --------------------------------------------------------------------------
+# Completion gate -- a DETERMINISTIC refusal to accept an answer that makes a
+# claim about a related asset the agent never actually examined.
+#
+# Prompt rule 4a asks for this behaviour and is only advisory. A live retest
+# measured it holding 3 times out of 4: in the fourth run the agent asked
+# "is K-101 the same problem as P-101?", called get_related_assets(K-101), saw
+# cooling valve CV-400 listed, never queried CV-400, and then asserted
+# "its cooling-water supplier CV-400 is not implicated" -- which contradicts
+# the data (CV-400 has an OPEN corrective work order for exactly that fault).
+# The gate turns that from a prompt the model may ignore into a turn it cannot
+# finish on, borrowing the idea from a sibling project's investigation
+# checklist. See docs/CHAT_AGENT.md Sec 5.
+# --------------------------------------------------------------------------
+
+# Phrases that mean "I could not establish a cause". Combined with an
+# unexamined neighbour, these are the second thing worth blocking: declaring
+# defeat while a named lead is still unchecked.
+_INCONCLUSIVE_MARKERS = (
+    "unconfirmed",
+    "not implicated",
+    "no supporting evidence",
+    "unexplained",
+    "cannot be determined",
+    "remains unclear",
+    "unresolved",
+)
+
+
+def _neighbours_discovered(trace: list[dict[str, Any]]) -> dict[str, str]:
+    """{unified_id: canonical_name} for every asset `get_related_assets` surfaced."""
+    found: dict[str, str] = {}
+    for call in trace:
+        if call.get("tool") != "get_related_assets":
+            continue
+        result = call.get("result")
+        if not isinstance(result, list):
+            continue
+        for row in result:
+            if isinstance(row, dict) and row.get("unified_id"):
+                found[row["unified_id"]] = row.get("canonical_name") or row["unified_id"]
+    return found
+
+
+def _assets_examined(trace: list[dict[str, Any]], kg: KnowledgeGraph) -> set[str]:
+    """Assets the agent actually pulled evidence for -- directly via
+    `get_asset_context`, via a trend on one of their tags, or as the owner of a
+    `search_evidence` hit."""
+    seen: set[str] = set()
+    for call in trace:
+        tool = call.get("tool")
+        args = call.get("arguments") or {}
+        if tool == "get_asset_context" and args.get("unified_id"):
+            seen.add(args["unified_id"])
+        elif tool == "get_historian_trend" and args.get("tag"):
+            asset_id, _ = _asset_for_record(kg, args["tag"])
+            if asset_id:
+                seen.add(asset_id)
+        elif tool == "search_evidence":
+            result = call.get("result")
+            if isinstance(result, dict):
+                for row in result.get("results", []):
+                    if isinstance(row, dict) and row.get("asset_id"):
+                        seen.add(row["asset_id"])
+    return seen
+
+
+def _asset_mention_terms(entities: list[dict[str, Any]], unified_id: str) -> set[str]:
+    """Strings an answer might use to refer to one asset: its unified_id,
+    canonical name, per-system local ids, and curated aliases.
+
+    The alias keywords are filtered to CODE-SHAPED ones only (they contain a
+    digit, e.g. "cv-400"). This matters: the plain words in that table --
+    "valve", "tank", "compressor" -- would match almost any refinery answer and
+    make the gate fire constantly. It also matters in the other direction: the
+    answer that triggered this work said "CV-400", which is neither the
+    canonical name ("Boiler Feed Flow Control Valve") nor any local_id, so
+    matching on those alone would have missed it entirely.
+    """
+    terms = {unified_id.lower()}
+    entity = next((e for e in entities if e["unified_id"] == unified_id), None)
+    if entity:
+        if entity.get("canonical_name"):
+            terms.add(entity["canonical_name"].lower())
+        for member in entity.get("members", []):
+            if member.get("local_id"):
+                terms.add(str(member["local_id"]).lower())
+    for alias in _ALIASES:
+        if _anchor_to_unified_id(entities, alias["anchor"]) != unified_id:
+            continue
+        terms.add(alias["name"].lower())
+        terms.update(k.lower() for k in alias["keywords"] if any(c.isdigit() for c in k))
+    return {t for t in terms if len(t) >= 4}
+
+
+def _unexamined_neighbour_claim(
+    content: str, trace: list[dict[str, Any]], entities: list[dict[str, Any]], kg: KnowledgeGraph
+) -> list[str]:
+    """Names of related assets this answer talks about (or gives up in front of)
+    without ever having queried them. Empty list = nothing to block on."""
+    discovered = _neighbours_discovered(trace)
+    if not discovered:
+        return []  # no neighbour was ever surfaced -- nothing to check
+    examined = _assets_examined(trace, kg)
+    unchecked = {aid: name for aid, name in discovered.items() if aid not in examined}
+    if not unchecked:
+        return []
+
+    lower = content.lower()
+    named = [
+        f"{name} ({aid})"
+        for aid, name in sorted(unchecked.items())
+        if any(term in lower for term in _asset_mention_terms(entities, aid))
+    ]
+    if named:
+        return named
+    # Nothing named, but the answer admits defeat while a lead is open.
+    if any(marker in lower for marker in _INCONCLUSIVE_MARKERS):
+        return [f"{name} ({aid})" for aid, name in sorted(unchecked.items())]
+    return []
+
+
 _HEADLINE_HEADING_RE = re.compile(r"^#{1,3}\s*Headline\s*$", re.IGNORECASE | re.MULTILINE)
 _RECOMMENDED_ACTIONS_HEADING_RE = re.compile(r"^#{1,3}\s*Recommended Actions?\s*$", re.IGNORECASE | re.MULTILINE)
 # The body heading is "Root Cause" for diagnostic questions and "Summary" for
@@ -1616,6 +1738,7 @@ def _run_agentic_events(
     ]
     trace: list[dict[str, Any]] = []
     plan_steps: list[dict[str, str]] = []
+    gate_used = False  # the completion gate fires at most once per question
 
     for _ in range(_MAX_AGENT_TURNS):
         message = provider.chat(messages, tools=TOOL_SCHEMAS, max_tokens=_ANSWER_MAX_TOKENS)
@@ -1626,6 +1749,38 @@ def _run_agentic_events(
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
             content = (message.get("content") or "").strip()
+
+            # Completion gate: refuse an answer that talks about (or gives up in
+            # front of) a related asset it never queried. Fires at most once so
+            # a stubborn model can't burn the whole turn budget here.
+            if not gate_used:
+                unexamined = _unexamined_neighbour_claim(content, trace, entities, kg)
+                if unexamined:
+                    gate_used = True
+                    reason = (
+                        "Your answer refers to " + ", ".join(unexamined) + ", which "
+                        "get_related_assets surfaced but you never queried. A related asset's "
+                        "existence is not evidence about it. Call get_asset_context on it, and "
+                        "get_historian_trend on its relevant tag (remember you get BOTH a 48h "
+                        "and a 336h view -- judge slow signals on the long one), then answer "
+                        "again. Do not state or dismiss a cause for an asset you have not "
+                        "examined."
+                    )
+                    messages.append({"role": "user", "content": reason})
+                    trace.append(
+                        {
+                            "type": "tool_call",
+                            "tool": "completion_gate",
+                            "arguments": {"unexamined": unexamined},
+                            "result": {"rejected": True, "reason": reason},
+                        }
+                    )
+                    yield {
+                        "type": "gate",
+                        "label": "Checking a related asset before concluding",
+                        "unexamined": unexamined,
+                    }
+                    continue
 
             # One retry at a larger budget if the model was cut off
             # mid-sentence. Truncation used to be silent -- a half-written

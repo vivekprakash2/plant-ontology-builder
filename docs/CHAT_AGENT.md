@@ -322,6 +322,7 @@ connection closes). Event shapes (see §1b for where each is yielded):
 | `type` | When | Payload |
 |---|---|---|
 | `plan` | Agentic mode calls `write_plan` | `{"steps": [{"text", "status"}, ...]}` |
+| `gate` | The completion gate rejected a final answer (§5) | `{"label", "unexamined": [...]}` — advisory/audit only; the frontend ignores unknown types, and the user sees the effect as the extra lookup the agent then performs |
 | `tool_call` | Right before a (non-plan) tool executes | `{"tool", "arguments", "label"}` — `label` is a human-readable "doing X" string |
 | `tool_result` | Right after a tool executes | `{"tool", "walk_step"}` — `walk_step` (`{"label", "node_ids"}` or `null`) is what the frontend uses for live graph-walk highlighting (§4b) |
 | `final` | Always exactly one, last | The full response shape above |
@@ -630,6 +631,21 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   ("…to protect cr") and nothing in the stack knew — `_split_agent_response()` happily parsed the
   half-written Markdown and the UI rendered it as a finished answer. `_ANSWER_MAX_TOKENS` also went
   1000 → 1600 → **2400**. If a 4th required section is ever added, re-check both budgets.
+- **The completion gate makes rule 4a enforceable instead of advisory.** Before accepting a final answer,
+  `_run_agentic_events` checks `_unexamined_neighbour_claim()`: if the answer *names* an asset that
+  `get_related_assets` surfaced but no `get_asset_context` / `get_historian_trend` / `search_evidence` ever
+  touched — or gives up (`"unconfirmed"`, `"not implicated"`, …) while such a lead is open — the answer is
+  **rejected**, an instruction is appended to the conversation, and the loop continues. It fires **at most
+  once** per question so a stubborn model can't burn the turn budget, and the rejection is recorded in the
+  trace as a `completion_gate` entry for audit.
+  Two design details that matter: (1) an answer that simply *doesn't discuss* a neighbour is **not** gated —
+  an agent is allowed to judge a branch irrelevant, and gating that would fire on nearly every answer;
+  (2) `_asset_mention_terms()` matches on the unified_id, canonical name, per-system local ids **and
+  code-shaped `_ALIASES` keywords** (those containing a digit). That last part is load-bearing in both
+  directions — the answer that motivated this said "CV-400", which is neither ASSET-004's canonical name
+  ("Boiler Feed Flow Control Valve") nor any local id, while the plain alias words ("valve", "tank") would
+  have matched almost any refinery answer. Idea borrowed from a sibling project's investigation checklist.
+  Covered by `tests/test_agent_dispatch.py::TestCompletionGate` (7 tests, scripted fake provider, no LLM).
 - **`get_related_assets` returning a neighbour is not evidence about that neighbour** — prompt rule **4a**
   exists because of measured run-to-run variance on exactly this: in one live run the agent asked
   "is K-101 the same problem as P-101?" (the handbook's S4 distractor), called `get_related_assets`, saw
