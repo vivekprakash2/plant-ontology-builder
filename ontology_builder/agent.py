@@ -1424,6 +1424,79 @@ def _trend_result_for_llm(result: Any) -> Any:
     return result
 
 
+# Phrases the model sometimes uses to clear/dismiss an asset despite having
+# been handed a `trend_note` (see `_trend_with_comparison`) explicitly
+# warning it not to. A retest measured this happening even though the
+# warning text and _AGENT_SYSTEM_PROMPT rule 5 both already say "never
+# dismiss a suspected cause on a short-window reading alone" -- the model
+# received the exact right evidence and wrote past it anyway on a fraction
+# of runs. `_find_dismissed_trend_warnings` below is a deterministic
+# backstop for that residual instruction-following miss, in the same spirit
+# as the finish_reason == "length" retry: don't just repeat the instruction
+# harder, catch the specific failure and force one corrective turn.
+_DISMISSAL_PHRASES_RE = re.compile(
+    r"not implicated|ruled out|rules? out|no(?:t)? (?:supporting )?evidence|"
+    r"isn'?t the cause|not the (?:cause|driver)|confirmed healthy|cooling (?:is |confirmed )?healthy|"
+    r"do not chase|don'?t chase|nothing (?:is |looks )?wrong|unconfirmed",
+    re.IGNORECASE,
+)
+
+
+def _tag_owner_aliases(kg: KnowledgeGraph, entities: list[dict[str, Any]], tag: str) -> list[str]:
+    """Every name a final answer might plausibly use for the asset that owns
+    a historian tag (via its HAS_HISTORIAN_TAG edge): the unified
+    canonical_name, every per-system member's own name/local_id, AND any
+    short equipment code (e.g. "CV-400", "P-101") embedded in one of those
+    strings -- the plant's informal codes often only show up parenthetically
+    in a system's own label (e.g. the Historian profile name "Cooling Water
+    Flow (CV-400)"), never as a clean alias field, but that's exactly the
+    name the model uses when writing about the asset in prose."""
+    unified_id = next((e.source for e in kg.edges if e.rel_type == "HAS_HISTORIAN_TAG" and e.target == tag), None)
+    if not unified_id:
+        return []
+    entity = next((e for e in entities if e["unified_id"] == unified_id), None)
+    if not entity:
+        return []
+    names = {entity["canonical_name"]}
+    for member in entity.get("members", []):
+        if member.get("name"):
+            names.add(member["name"])
+        if member.get("local_id"):
+            names.add(member["local_id"])
+    for name in list(names):
+        names.update(_EQUIPMENT_CODE_RE.findall(name))
+    return sorted(names)
+
+
+_EQUIPMENT_CODE_RE = re.compile(r"\b[A-Z]{1,4}-\d{2,4}\b")
+
+
+def _find_dismissed_trend_warnings(
+    trace: list[dict[str, Any]], kg: KnowledgeGraph, entities: list[dict[str, Any]], content: str
+) -> list[str]:
+    """The `trend_note` text for any historian trend this run fetched that
+    (a) disagreed between its short- and long-window readings and (b) whose
+    owning asset the final answer appears to clear/dismiss with language
+    like "not implicated" or "ruled out". Empty if nothing looks
+    contradicted. Deliberately conservative -- requires both the asset's
+    name (or one of its per-system aliases/equipment codes) AND dismissive
+    language to appear in the answer, so it only fires on the narrow case
+    this exists for, not on every mention of a slow-moving tag."""
+    warnings = []
+    content_lower = content.lower()
+    for call in trace:
+        if call.get("tool") != "get_historian_trend":
+            continue
+        result = call.get("result")
+        if not isinstance(result, dict) or "trend_note" not in result:
+            continue
+        aliases = _tag_owner_aliases(kg, entities, call.get("arguments", {}).get("tag", ""))
+        if any(alias.lower() in content_lower for alias in aliases) and _DISMISSAL_PHRASES_RE.search(content):
+            owner = aliases[0] if aliases else call.get("arguments", {}).get("tag", "")
+            warnings.append(f"{owner} ({call['arguments'].get('tag')}): {result['trend_note']}")
+    return warnings
+
+
 _VALID_PLAN_STATUSES = {"pending", "in_progress", "done"}
 
 
@@ -1566,6 +1639,41 @@ def _run_agentic_events(
                     messages[-1] = retry
                     content = retry_content
                     finish_reason = retry_reason
+
+            # Deterministic backstop for the same class of bug the retry
+            # above fixes for truncation, but for contradicted evidence: a
+            # retest found the model can be handed an explicit trend_note
+            # warning (see _trend_with_comparison) not to clear an asset on
+            # a short-window reading, and still write a final answer that
+            # does exactly that. One corrective turn, same bounded shape as
+            # the truncation retry: hand the model its own warning back
+            # verbatim and let it revise; keep the original answer if the
+            # model doesn't produce a clean revision (e.g. it calls more
+            # tools instead -- we don't re-enter the tool loop here).
+            dismissed = _find_dismissed_trend_warnings(trace, kg, entities, content)
+            if dismissed:
+                nudge = {
+                    "role": "user",
+                    "content": (
+                        "Before finalizing, re-check your draft answer above. It appears to clear or "
+                        "dismiss an asset that has an unresolved long-window trend warning:\n- "
+                        + "\n- ".join(dismissed)
+                        + "\nIf this changes your conclusion, rewrite the full answer (same Markdown "
+                        "heading structure as before). If you still believe it's not the cause after "
+                        "weighing the long-window reading, keep your answer but say so explicitly and "
+                        "explain why the short-window reading is the relevant one here."
+                    ),
+                }
+                messages.append(nudge)
+                retry = provider.chat(messages, tools=TOOL_SCHEMAS, max_tokens=_ANSWER_MAX_TOKENS)
+                retry_reason = retry.pop("_finish_reason", None)
+                retry_content = (retry.get("content") or "").strip()
+                if retry_content and not (retry.get("tool_calls") or []):
+                    messages.append(retry)
+                    content = retry_content
+                    finish_reason = retry_reason
+                else:
+                    messages.pop()  # nudge didn't help -- drop it, keep the original answer
 
             truncated = finish_reason == "length"
             primary_id = _primary_asset_id_from_trace(trace)

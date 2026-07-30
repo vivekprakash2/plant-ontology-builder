@@ -25,7 +25,9 @@ from ontology_builder.agent import (
     _MAX_HISTORY_CHARS,
     _MAX_HISTORY_TURNS,
     _dispatch,
+    _find_dismissed_trend_warnings,
     _history_messages,
+    _tag_owner_aliases,
     _tool_get_historian_trend,
     _trend_result_for_llm,
     build_ui_panel,
@@ -222,6 +224,72 @@ class TestHistorianTrendTool(unittest.TestCase):
         for key in ("tag", "direction", "pct_change", "n_readings", "start_ts", "end_ts", "points"):
             self.assertIn(key, r)
         self.assertNotIn("points", _trend_result_for_llm(r))
+
+
+class TestDismissedTrendWarningDetection(unittest.TestCase):
+    """The next layer of defense after TestHistorianTrendTool above: even with
+    `get_historian_trend` always handing back a `trend_note` warning (and
+    _AGENT_SYSTEM_PROMPT rule 5 telling the model never to dismiss a cause on
+    a short-window reading alone), a retest still measured a live run write a
+    final answer clearing CV-400 as "not implicated" after fetching CWFL_01
+    over 48h only, ignoring the note it was handed. `_find_dismissed_trend_warnings`
+    is a deterministic check for exactly that pattern -- see its docstring and
+    the corrective retry built around it in `_run_agentic_events`.
+
+    Runs entirely offline: it only touches the pure functions, not the LLM.
+    """
+
+    CWFL = "FAC1.UNIT400.CONTROL_VALVE_101.CWFL_01"  # CV-400's cooling-water flow
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.entities, cls.kg = load_or_build()
+
+    def test_aliases_include_the_informal_equipment_code(self) -> None:
+        # "CV-400" is what every real transcript calls this valve, but it
+        # isn't a clean alias field anywhere -- it's embedded parenthetically
+        # in the Historian profile's own name ("Cooling Water Flow (CV-400)").
+        aliases = _tag_owner_aliases(self.kg, self.entities, self.CWFL)
+        self.assertIn("CV-400", aliases)
+        self.assertIn("Boiler Feed Flow Control Valve", aliases)
+
+    def test_flags_a_dismissal_that_contradicts_the_trend_note(self) -> None:
+        trend = _tool_get_historian_trend(self.entities, self.kg, {"tag": self.CWFL, "window_hours": 48})
+        self.assertIn("trend_note", trend)  # sanity: this tag does disagree across windows
+        trace = [{"tool": "get_historian_trend", "arguments": {"tag": self.CWFL}, "result": trend}]
+        content = (
+            "K-101's cooling-water supply from CV-400 is steady, and with cooling confirmed "
+            "healthy this is not implicated in the vibration rise."
+        )
+        warnings = _find_dismissed_trend_warnings(trace, self.kg, self.entities, content)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("WINDOW MATTERS", warnings[0])
+
+    def test_does_not_flag_an_answer_that_heeds_the_warning(self) -> None:
+        trend = _tool_get_historian_trend(self.entities, self.kg, {"tag": self.CWFL, "window_hours": 48})
+        trace = [{"tool": "get_historian_trend", "arguments": {"tag": self.CWFL}, "result": trend}]
+        content = (
+            "CV-400's cooling-water flow fell ~14% over the last 14 days even though it reads "
+            "stable over the last 48h -- consistent with a sticking valve (WO-4530)."
+        )
+        self.assertEqual(_find_dismissed_trend_warnings(trace, self.kg, self.entities, content), [])
+
+    def test_does_not_flag_when_asset_isnt_mentioned(self) -> None:
+        trend = _tool_get_historian_trend(self.entities, self.kg, {"tag": self.CWFL, "window_hours": 48})
+        trace = [{"tool": "get_historian_trend", "arguments": {"tag": self.CWFL}, "result": trend}]
+        content = "Something else entirely is not implicated in this vibration rise."
+        self.assertEqual(_find_dismissed_trend_warnings(trace, self.kg, self.entities, content), [])
+
+    def test_does_not_flag_when_windows_agree(self) -> None:
+        # VIB_01 rises consistently in both windows (no trend_note at all),
+        # so even dismissive-sounding text about it should never be flagged.
+        trend = _tool_get_historian_trend(
+            self.entities, self.kg, {"tag": "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01", "window_hours": 48}
+        )
+        self.assertNotIn("trend_note", trend)
+        trace = [{"tool": "get_historian_trend", "arguments": {"tag": trend["tag"]}, "result": trend}]
+        content = "Crude Charge Pump 101's vibration is not implicated in anything else."
+        self.assertEqual(_find_dismissed_trend_warnings(trace, self.kg, self.entities, content), [])
 
 
 class TestHistoryMessages(unittest.TestCase):

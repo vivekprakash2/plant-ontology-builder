@@ -580,12 +580,27 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   time, so the fix removes the choice rather than restating the instruction. The requested window's fields
   stay at the top level specifically so `build_ui_panel`'s charts, `_describe_record` and
   `_flatten_evidence` keep working untouched.
-- **Almost every unit test exercises the DETERMINISTIC path, not the agentic one.** A green 36/36 is not
+- **...and the model can still contradict its own `trend_note` warning, so there's a second, deterministic
+  backstop.** A further retest re-ran the S4 question after the above fix and caught a live run whose final
+  answer stated CV-400's cooling-water supply was "steady" and "confirmed healthy" — using only the 48h
+  reading — despite the tool result it was handed containing the exact `trend_note` telling it not to do
+  that. `_find_dismissed_trend_warnings()` scans the trace for any `get_historian_trend` result carrying an
+  unresolved `trend_note` whose owning asset (matched against **all** its per-system aliases, including
+  informal codes like "CV-400" that only ever appear parenthetically inside a system's own name string —
+  see `_tag_owner_aliases()`) the final answer text dismisses with language like "not implicated"/"ruled
+  out"/"confirmed healthy". If found, `_run_agentic_events` spends exactly one corrective turn quoting the
+  warning back to the model verbatim and asking it to revise, mirroring the `finish_reason == "length"`
+  retry's shape (bounded, deterministic, falls back to the original answer if the model doesn't produce a
+  clean revision). Covered by `TestDismissedTrendWarningDetection` (offline, pure-function tests of the
+  detector itself — the corrective retry's live effect still needs a real-LLM retest to confirm).
+- **Almost every unit test exercises the DETERMINISTIC path, not the agentic one.** A green 41/41 is not
   evidence that the live LLM path behaves — e.g. `test_q3_c101_differential_pressure_multihop` asserts the
   word "cavitation" appears, which `_dispatch` guarantees but the live agent reliably does *not* say (it
   consistently frames P-102's falling suction as a symptom of the E-101→H-101 chain rather than S3's
-  second cause). `TestHistorianTrendTool` is one of the few agentic-path tests. Treat agentic behaviour as
-  verified only by a live retest (`demo_run/`), never by the suite alone.
+  second cause, across every live run measured so far — this is still an open gap, not yet fixed the way
+  the CV-400/window-length one was). `TestHistorianTrendTool` and `TestDismissedTrendWarningDetection` are
+  the few agentic-path-relevant tests, and both only exercise pure helper functions, not the live model.
+  Treat agentic behaviour as verified only by a live retest (`demo_run/`), never by the suite alone.
 - **The Column/Compressor `C-101` code collision** (AM uses `C-101` as an alias for the compressor, DCS/
   Historian use it for the actual column) is a Stage 1 entity-resolution trap, but it's relevant here too:
   `_ALIASES`' `"anchor"` fields are deliberately `(system, local_id)` pairs, never a bare code string, so
@@ -726,3 +741,16 @@ Not blocking for the current rubric, but relevant if this session extends the ch
 - **No MCP (Model Context Protocol) wrapping** — the tool-calling design already matches MCP's shape
   (schemas + read-only executors), but exposing it as an actual MCP server was judged explicitly optional
   per `docs/TEAM_HANDBOOK.md` and not pursued.
+- **Residual LLM instruction-following variance is a known, not-fully-closeable limitation of the agentic
+  path.** Two concrete, measured cases as of 2026-07-29:
+  - S4 (K-101 vs P-101): even with the dual-window `trend_note` mechanism (§5) AND a deterministic
+    contradiction-retry backstop (`_find_dismissed_trend_warnings`, §5) both in place, a model can in
+    principle still write a final answer that ignores a corrective nudge on its retry turn too — the retry
+    reduces but does not mathematically guarantee zero occurrences. Re-verify with a fresh live retest
+    (multiple runs) before relying on this scenario's consistency for a demo.
+  - S3 (C-101 dP): the live agentic path has never (across every run measured so far) framed reflux pump
+    P-102's falling suction pressure as a genuine *contributing* cause (SCENARIO.md §5b's "cold feed **+**
+    reflux cavitation" dual cause) — it's always described as a downstream symptom of the E-101→H-101
+    chain, at most a forward-looking risk to "monitor for cavitation." This is unfixed; a similar
+    prompt-plus-deterministic-backstop approach (as used for S4) would be the natural next step if it needs
+    closing before a demo.
