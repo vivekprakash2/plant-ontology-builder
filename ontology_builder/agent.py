@@ -121,30 +121,114 @@ def _downsample_points(series: list[dict[str, Any]], max_points: int = 120) -> l
     return [{"t": r["timestamp"], "v": float(r["value"])} for r in picked]
 
 
-def _trend(tag: str, now: datetime = NOW, window_hours: int = 48) -> Optional[dict[str, Any]]:
-    start = (now - timedelta(hours=window_hours)).isoformat().replace("+00:00", "Z")
-    end = now.isoformat().replace("+00:00", "Z")
-    series = historian_series(tag, start=start, end=end)
+# The two windows that matter for this plant's signals: fast-moving ones
+# (vibration) reveal themselves in ~48h, slow ones (fouling, lube-oil
+# temperature) need ~14 days. See `_trend_with_comparison` for why both are
+# always reported to the agent.
+_SHORT_WINDOW_HOURS = 48
+_LONG_WINDOW_HOURS = 336
+
+
+def _summarize_series(tag: str, series: list[dict[str, Any]], window_hours: int) -> Optional[dict[str, Any]]:
+    """Direction/percent-change summary for one already-fetched slice."""
     if len(series) < 2:
         return None
     first, last = float(series[0]["value"]), float(series[-1]["value"])
     delta = last - first
     pct = (delta / abs(first) * 100) if first else 0.0
-    direction = "rising" if pct > 3 else ("falling" if pct < -3 else "stable")
     return {
         "tag": tag,
+        "window_hours": window_hours,
         "first": first,
         "last": last,
         "pct_change": round(pct, 1),
-        "direction": direction,
+        "direction": "rising" if pct > 3 else ("falling" if pct < -3 else "stable"),
         "n_readings": len(series),
         "start_ts": series[0]["timestamp"],
         "end_ts": series[-1]["timestamp"],
-        # Chart-ready downsampled points -- kept out of the LLM's tool-call
-        # results (see _tool_get_historian_trend) to avoid bloating the
-        # prompt, but used by build_ui_panel() for the frontend trend chart.
-        "points": _downsample_points(series),
     }
+
+
+def _trend(tag: str, now: datetime = NOW, window_hours: int = 48) -> Optional[dict[str, Any]]:
+    start = (now - timedelta(hours=window_hours)).isoformat().replace("+00:00", "Z")
+    end = now.isoformat().replace("+00:00", "Z")
+    series = historian_series(tag, start=start, end=end)
+    summary = _summarize_series(tag, series, window_hours)
+    if summary is None:
+        return None
+    # Chart-ready downsampled points -- kept out of the LLM's tool-call
+    # results (see _tool_get_historian_trend) to avoid bloating the
+    # prompt, but used by build_ui_panel() for the frontend trend chart.
+    summary["points"] = _downsample_points(series)
+    return summary
+
+
+def _trend_with_comparison(
+    tag: str, now: datetime = NOW, window_hours: int = _SHORT_WINDOW_HOURS
+) -> Optional[dict[str, Any]]:
+    """The requested window PLUS the complementary one, from a single pass
+    over the historian file.
+
+    Why both: a retest measured the agent's S4 answer flipping purely on which
+    window it happened to ask for. K-101's lube-oil temperature is
+    `stable -0.3%` over 48h but `rising +32.1%` over 336h -- it climbed
+    54 -> 72 degC over two weeks and then plateaued. Both readings are true.
+    Every run that asked for 48h concluded the cooling valve CV-400 was "not
+    implicated" (one of them said so having never even checked it); every run
+    that asked for 336h named CV-400 correctly. The prompt already asked for a
+    long window on slow signals and was followed only half the time, so this
+    removes the choice instead of restating the instruction: whichever window
+    is requested, the other comes back alongside it, plus an explicit note when
+    the two disagree.
+
+    The requested window's fields stay at the TOP LEVEL so every existing
+    consumer (chart building in `build_ui_panel`, `_describe_record`,
+    `_flatten_evidence`) keeps working unchanged.
+    """
+    windows = sorted({int(window_hours), _SHORT_WINDOW_HOURS, _LONG_WINDOW_HOURS})
+    widest = max(windows)
+    end_dt = now
+    end = end_dt.isoformat().replace("+00:00", "Z")
+    # One scan of the ~518k-row file for the widest window; the narrower ones
+    # are sliced out of it in memory.
+    series = historian_series(tag, start=(now - timedelta(hours=widest)).isoformat().replace("+00:00", "Z"), end=end)
+    if len(series) < 2:
+        return None
+
+    def slice_for(hours: int) -> list[dict[str, Any]]:
+        if hours >= widest:
+            return series
+        cutoff = now - timedelta(hours=hours)
+        return [r for r in series if _parse_ts(r["timestamp"]) >= cutoff]
+
+    requested = _summarize_series(tag, slice_for(int(window_hours)), int(window_hours))
+    if requested is None:
+        return None
+    requested["points"] = _downsample_points(slice_for(int(window_hours)))
+
+    others = []
+    for hours in windows:
+        if hours == int(window_hours):
+            continue
+        summary = _summarize_series(tag, slice_for(hours), hours)
+        if summary:
+            summary.pop("tag", None)
+            others.append(summary)
+    if others:
+        requested["other_windows"] = others
+        disagreeing = [o for o in others if o["direction"] != requested["direction"]]
+        if disagreeing:
+            longest = max(others, key=lambda o: o["window_hours"])
+            requested["trend_note"] = (
+                f"WINDOW MATTERS for this tag: over {requested['window_hours']}h it reads "
+                f"'{requested['direction']}' ({requested['pct_change']:+.1f}%), but over "
+                f"{longest['window_hours']}h it reads '{longest['direction']}' "
+                f"({longest['pct_change']:+.1f}%). A signal that rose and then plateaued looks "
+                "flat in a short window. Judge slow-moving signals (lube-oil temperature, "
+                "exchanger fouling, bearing temperature) on the LONGER window before concluding "
+                "that nothing is wrong."
+            )
+    return requested
 
 
 def _find_tag(context: dict[str, list[dict[str, Any]]], suffix: str) -> Optional[str]:
@@ -839,9 +923,13 @@ _AGENT_SYSTEM_PROMPT = (
     "candidate root cause FOR THAT ASSET in its own right, not automatically just a downstream "
     "symptom of some other cause -- weigh it against the alternative explanations using the actual "
     "evidence, don't dismiss it by default just because another plausible cause is also present.\n"
-    "5. Use get_historian_trend with a short window (e.g. 48 hours) for fast-moving signals like "
-    "vibration, and a longer window (e.g. 336 hours / 14 days) for slow trends like fouling or "
-    "lube-oil temperature.\n"
+    "5. get_historian_trend ALWAYS returns both a 48-hour and a 336-hour (14-day) view -- the "
+    "window you asked for at the top level, the other under 'other_windows'. Read both before "
+    "concluding. When they disagree the result includes a 'trend_note': a signal that rose and "
+    "then plateaued reads 'stable' over 48h while still sitting at a badly elevated level, so a "
+    "short-window 'stable' is NOT evidence that a slow-moving signal (lube-oil temperature, "
+    "exchanger fouling, bearing temperature) is healthy. Never dismiss a suspected cause on a "
+    "short-window reading alone.\n"
     "6. If the evidence doesn't support a confident conclusion, say so explicitly rather than "
     "guessing.\n"
     "6b. The conversation may include earlier question/answer turns. Use them to resolve "
@@ -907,8 +995,12 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_historian_trend",
             "description": (
-                "Get the direction and percent change of a historian tag's value over a recent "
-                "time window (never returns raw rows -- only a computed trend summary)."
+                "Get the direction and percent change of a historian tag's value (never returns "
+                "raw rows -- only computed trend summaries). ALWAYS returns BOTH a short (48h) "
+                "and long (336h/14-day) view: the window you request at the top level, and the "
+                "other under 'other_windows'. If they disagree a 'trend_note' explains which to "
+                "trust -- a signal that rose then plateaued reads 'stable' over 48h while still "
+                "being badly elevated, so check the long window before concluding nothing is wrong."
             ),
             "parameters": {
                 "type": "object",
@@ -1141,7 +1233,7 @@ def _tool_get_historian_trend(entities: list[dict[str, Any]], kg: KnowledgeGraph
         window_hours = int(window_hours)
     except (TypeError, ValueError):
         window_hours = 48
-    trend = _trend(tag, window_hours=window_hours)
+    trend = _trend_with_comparison(tag, window_hours=window_hours)
     if trend is None:
         return {"error": f"No/insufficient historian data for tag '{tag}' in a {window_hours}h window."}
     return trend

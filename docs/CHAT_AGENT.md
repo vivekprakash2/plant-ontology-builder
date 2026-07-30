@@ -134,7 +134,7 @@ pre-baked answer to polish. This is the "expose the graph via tools, build an ag
 | `write_plan` | Write/update a step-by-step investigation plan (list of `{text, status}`), shown live to the user as a checklist | UI-only — doesn't query the graph. The system prompt instructs the model to call this FIRST, then again whenever a step's status changes. Handled inline in the loop (not via `_TOOL_EXECUTORS`) since it just updates `plan_steps`, not the KG |
 | `list_assets` | Every physical asset, canonical name, per-system IDs | Model calls this first if it doesn't know the exact `unified_id` |
 | `get_asset_context` | All alarms/alarm-point configuration/work orders/operator actions/health events/cost postings/historian tags connected to one asset | Wraps `KnowledgeGraph.context_for_asset`; adds a human `time_ago` string per record. Includes `AlarmConfig` records (configured HH/H/L/LL limits + deadband, see §6) alongside `AlarmEvent` |
-| `get_historian_trend` | Direction + %change of one tag over a window (never raw rows) | Wraps `_trend()`; caller picks `window_hours` (short for vibration, long for fouling) |
+| `get_historian_trend` | Direction + %change of one tag, **always for both a 48h and a 336h window** (never raw rows) | Wraps `_trend_with_comparison()`; the requested window is top-level, the other under `other_windows`, plus a `trend_note` when they disagree. One file pass. See §5 for why both are forced |
 | `get_related_assets` | `FEEDS`/`COOLS`/`SUPPLIES_UTILITY` process-flow relationships | Enables multi-hop causal reasoning across equipment |
 | `search_evidence` | Free-text substring search over alarm/work-order/operator-action/health-event/cost-posting fields (notes, symptoms, alarm points, technicians, etc.), optionally scoped by `systems` | Added to unblock open-ended, content-first questions not anchored to a known asset (e.g. "which work orders mention a shim kit"). Each match includes its resolved `asset_id`/`asset_name` via `_asset_for_record()`. Capped at `max_results` (default 20, max 50) |
 | `get_plant_status_summary` | Plant-wide snapshot: every ACTIVE alarm, every non-`Closed` work order, recent APM health events, across ALL assets | Added for "what's going on right now" questions that aren't about one specific asset. Capped (30/30/15) — a snapshot, not an exhaustive dump |
@@ -564,9 +564,28 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   `topology_extraction: N accepted, M dropped` line — investigate a non-zero `dropped` count) before
   trusting the cache for a demo. The deterministic fallback topology (`graph.py`'s `_PROCESS_TOPOLOGY`)
   is complete per SCENARIO.md §5b.
-- **Historian trend window length matters.** 48h default is right for vibration but falsely shows "stable"
-  for slow trends (fouling, lube-oil temp) — those handlers explicitly pass `window_hours=24*14`. Any new
-  handler dealing with a slow-moving signal must do the same.
+- **Historian trend window length matters — and the agentic tool no longer lets the model get it wrong.**
+  48h is right for vibration but falsely reads "stable" for slow signals (fouling, lube-oil temp). The
+  deterministic handlers pass `window_hours=24*14` explicitly, and any new handler dealing with a
+  slow-moving signal must too. For the **agentic** path, `get_historian_trend` now calls
+  `_trend_with_comparison()`, which returns the requested window at the top level **plus** the
+  complementary one under `other_windows`, from a **single pass** over the 518k-row file (widest window
+  fetched once, narrower ones sliced in memory — no added latency, measured 1.9s either way). When the two
+  windows disagree it adds an explicit `trend_note`.
+  *Why this exists:* a retest measured the S4 answer flipping purely on the window the model happened to
+  request. K-101's `LUBE_01` is `stable -0.3%` over 48h but `rising +32.1%` over 336h (54 → 72 °C, then
+  plateaued) — **both true**. All runs that asked for 48h concluded cooling valve CV-400 was "not
+  implicated" (one asserted it without ever checking CV-400); all runs that asked for 336h named CV-400
+  correctly. Prompt rule 5 already asked for a long window on slow signals and was followed ~half the
+  time, so the fix removes the choice rather than restating the instruction. The requested window's fields
+  stay at the top level specifically so `build_ui_panel`'s charts, `_describe_record` and
+  `_flatten_evidence` keep working untouched.
+- **Almost every unit test exercises the DETERMINISTIC path, not the agentic one.** A green 36/36 is not
+  evidence that the live LLM path behaves — e.g. `test_q3_c101_differential_pressure_multihop` asserts the
+  word "cavitation" appears, which `_dispatch` guarantees but the live agent reliably does *not* say (it
+  consistently frames P-102's falling suction as a symptom of the E-101→H-101 chain rather than S3's
+  second cause). `TestHistorianTrendTool` is one of the few agentic-path tests. Treat agentic behaviour as
+  verified only by a live retest (`demo_run/`), never by the suite alone.
 - **The Column/Compressor `C-101` code collision** (AM uses `C-101` as an alias for the compressor, DCS/
   Historian use it for the actual column) is a Stage 1 entity-resolution trap, but it's relevant here too:
   `_ALIASES`' `"anchor"` fields are deliberately `(system, local_id)` pairs, never a bare code string, so

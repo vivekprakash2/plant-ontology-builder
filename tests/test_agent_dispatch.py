@@ -26,6 +26,8 @@ from ontology_builder.agent import (
     _MAX_HISTORY_TURNS,
     _dispatch,
     _history_messages,
+    _tool_get_historian_trend,
+    _trend_result_for_llm,
     build_ui_panel,
 )
 from ontology_builder.pipeline import load_or_build
@@ -165,6 +167,61 @@ class TestDispatch(unittest.TestCase):
         # column code) -- the fallback declines rather than guessing.
         a = self.ask("What is wrong with C-101?")
         self.assertEqual(a.scenario, "unresolved")
+
+
+class TestHistorianTrendTool(unittest.TestCase):
+    """`get_historian_trend` must always hand the agent BOTH a short and a long
+    view of a tag.
+
+    This exists because of a measured failure: K-101's lube-oil temperature is
+    `stable -0.3%` over 48h but `rising +32.1%` over 336h (it climbed
+    54 -> 72 degC, then plateaued). Every live agentic run that happened to ask
+    for 48h concluded the cooling valve CV-400 was "not implicated"; every run
+    that asked for 336h named it correctly. The tool now removes that choice.
+
+    Note this is one of the few tests that exercises an AGENTIC-path code path
+    rather than the deterministic fallback -- see docs/CHAT_AGENT.md Sec 5.
+    """
+
+    LUBE = "FAC1.UNIT100.GAS_COMPRESSOR_101.LUBE_01"
+    VIB = "FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.entities, cls.kg = load_or_build()
+
+    def call(self, tag: str, window_hours: int):
+        return _tool_get_historian_trend(self.entities, self.kg, {"tag": tag, "window_hours": window_hours})
+
+    def test_short_window_still_surfaces_the_long_trend(self) -> None:
+        r = self.call(self.LUBE, 48)
+        self.assertEqual(r["direction"], "stable")  # the misleading short view
+        longer = [o for o in r["other_windows"] if o["window_hours"] == 336]
+        self.assertEqual(len(longer), 1)
+        self.assertEqual(longer[0]["direction"], "rising")
+        self.assertGreater(longer[0]["pct_change"], 30)
+        # ...and it must say so explicitly, not just include the number.
+        self.assertIn("WINDOW MATTERS", r["trend_note"])
+
+    def test_long_window_request_also_gets_the_short_view(self) -> None:
+        r = self.call(self.LUBE, 336)
+        self.assertEqual(r["direction"], "rising")
+        self.assertEqual([o["window_hours"] for o in r["other_windows"]], [48])
+
+    def test_no_note_when_both_windows_agree(self) -> None:
+        r = self.call(self.VIB, 48)
+        self.assertEqual(r["direction"], "rising")
+        self.assertTrue(all(o["direction"] == "rising" for o in r["other_windows"]))
+        self.assertNotIn("trend_note", r)  # don't cry wolf on agreeing windows
+
+    def test_chart_pipeline_shape_preserved(self) -> None:
+        """The requested window's fields must stay at the TOP level, and the
+        chart-only `points` array must be stripped before the result is sent to
+        the model."""
+        r = self.call(self.VIB, 48)
+        for key in ("tag", "direction", "pct_change", "n_readings", "start_ts", "end_ts", "points"):
+            self.assertIn(key, r)
+        self.assertNotIn("points", _trend_result_for_llm(r))
 
 
 class TestHistoryMessages(unittest.TestCase):
