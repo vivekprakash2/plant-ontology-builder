@@ -648,14 +648,30 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
   +2.2%), and dismissed cavitation as "not the driver." Fixed to always reference `_LONG_WINDOW_HOURS`
   (336) regardless of which side was requested -- see §7 for the full story and the companion rule 4c
   (falling suction pressure is evidence FOR cavitation risk, not against it) added alongside it.
+- **`_tag_owner_aliases()` still can't resolve the informal "P-101"/"P-102"/"K-101"-style shorthand that
+  the model (and every question/handbook answer) actually uses in prose**, because unlike "CV-400" (which
+  appears literally, parenthetically, inside a Historian profile name) that shorthand never appears as a
+  literal substring ANYWHERE in the source data for pumps/compressors/exchangers/heaters/columns — their
+  records only ever say things like "Centrifugal Pump 102"/"PUMP_102"/"Pump_002". Confirmed live twice: Q3
+  answers dismissing "P-101"/"P-102" by that shorthand alone went uncorrected because neither string
+  matched any resolved alias, so `_find_dismissed_trend_warnings()` returned `[]` and no corrective retry
+  fired. A fix synthesizing the code from `asset_class` + `equipment_number` (e.g. `Pump` + `102` →
+  `"P-102"`) was prototyped and live-validated (it did make the retry fire and improved a real S3 answer),
+  but was **deliberately reverted** as not generalizable: it required a hand-maintained
+  `asset_class` → letter table, and even within this one dataset 2 of 8 classes (`Valve`, `Tank`) broke the
+  "equipment_number matches the informal number" assumption outright, for reasons untraceable to any
+  field — so the approach doesn't hold up as a general rule, only as a per-class fit that must be
+  re-verified by hand for every new asset class or dataset. Left open; the durable fix, if this is revisited,
+  is an explicit `informal_code` field populated at ingestion (with per-asset overrides for the
+  Valve/Tank-style exceptions) rather than deriving it ad hoc in the chat agent.
 - **Almost every unit test exercises the DETERMINISTIC path, not the agentic one.** A green 48/48 is not
   evidence that the live LLM path behaves — e.g. `test_q3_c101_differential_pressure_multihop` asserts the
   word "cavitation" appears, which `_dispatch` guarantees but the live agent still does not reliably say
   (a 2026-07-29 fix stopped it reasoning *backwards* about P-102's falling suction pressure — see §7 — but
   2 fresh live runs after the fix still ranked it a secondary/unconfirmed factor rather than a full
   co-equal cause, so this remains a real, if smaller, gap). `TestHistorianTrendTool` and
-  `TestDismissedTrendWarningDetection` are
-  the few agentic-path-relevant tests, and both only exercise pure helper functions, not the live model.
+  `TestDismissedTrendWarningDetection` are the few agentic-path-relevant tests, and both only exercise pure
+  helper functions, not the live model.
   Treat agentic behaviour as verified only by a live retest (`demo_run/`), never by the suite alone.
 - **The Column/Compressor `C-101` code collision** (AM uses `C-101` as an alias for the compressor, DCS/
   Historian use it for the actual column) is a Stage 1 entity-resolution trap, but it's relevant here too:
@@ -844,3 +860,14 @@ Not blocking for the current rubric, but relevant if this session extends the ch
     directly) — that calibration gap is a smaller, more defensible remaining issue than the earlier
     backwards reasoning, and is left open; a deterministic backstop analogous to S4's could still be added
     if a demo needs the model to assert cavitation more confidently.
+
+    A separate, still-live variance case surfaced next: a Q3 answer that was no longer backwards but was
+    vague — *"its suction pressure is stable/slightly falling ... not the cause"* — with no cited figure.
+    Investigating why the S4-style corrective retry didn't catch this (it should have, since "not the
+    cause" matches the dismissal-phrase regex) found the real gap was in alias resolution, not the
+    detector: `_tag_owner_aliases()` doesn't resolve "P-102" at all — unlike "CV-400", that shorthand never
+    appears as a literal substring anywhere in `data/`, so the asset-name check silently never matched and
+    no retry fired. A fix synthesizing the code from `asset_class` + `equipment_number` was prototyped and
+    did live-validate (the retry fired and a re-run cited the exact -11.8% figure instead of hedging), but
+    was reverted as not generalizable — see §5's `_tag_owner_aliases()` bullet for why. This specific vague-
+    dismissal variance is therefore still open.
