@@ -205,12 +205,25 @@ function formatConfidence(label) {
 
 // --- Minimal, safe Markdown renderer -------------------------------------
 // Handles the subset the agent is instructed to use: #/##/### headings,
-// bullet/numbered lists, **bold**/*italic* inline spans, and paragraphs.
-// Builds real DOM nodes via createElement/textContent -- never innerHTML
-// with model-provided text -- so this cannot introduce XSS even though the
-// text ultimately comes from an LLM response.
+// bullet/numbered lists, `code`/**bold**/*italic* inline spans, and
+// paragraphs. Builds real DOM nodes via createElement/textContent -- never
+// innerHTML with model-provided text -- so this cannot introduce XSS even
+// though the text ultimately comes from an LLM response.
 function appendInlineMarkdown(parent, text) {
-  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+  // Code spans are matched FIRST and their content is never re-parsed for
+  // bold/italic -- this matters because every historian tag/identifier the
+  // model cites is backtick-wrapped prose (e.g.
+  // `FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01`) and is riddled with
+  // underscores. Bare underscore-italic (_text_) is intentionally NOT
+  // supported at all: it used to treat any two underscores anywhere in a
+  // paragraph as an open/close pair, so one tag name with an odd number of
+  // underscores (very common -- they're used as a word separator, not
+  // emphasis) would swallow everything up to the NEXT unrelated underscore
+  // into a single giant <em>, silently eating the underscores out of the
+  // tag names in the process and italicizing half the paragraph. The model
+  // is told to use backticks for identifiers and **bold** for emphasis, so
+  // dropping _italic_ isn't a real loss -- see docs/CHAT_AGENT.md.
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   let lastIndex = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -218,8 +231,17 @@ function appendInlineMarkdown(parent, text) {
       parent.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
     }
     const token = match[0];
-    const el = document.createElement(token.startsWith("**") ? "strong" : "em");
-    el.textContent = token.startsWith("**") ? token.slice(2, -2) : token.slice(1, -1);
+    let el;
+    if (token.startsWith("`")) {
+      el = document.createElement("code");
+      el.textContent = token.slice(1, -1);
+    } else if (token.startsWith("**")) {
+      el = document.createElement("strong");
+      el.textContent = token.slice(2, -2);
+    } else {
+      el = document.createElement("em");
+      el.textContent = token.slice(1, -1);
+    }
     parent.appendChild(el);
     lastIndex = pattern.lastIndex;
   }

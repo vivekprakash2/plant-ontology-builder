@@ -543,6 +543,19 @@ hidden), then nodes are **progressively revealed** as the reasoning touches them
 
 ## 5. Quirks & gotchas (keep this section current)
 
+- **`appendInlineMarkdown()`'s inline emphasis regex used to treat any bare `_..._` pair as italic, and had
+  no code-span support at all** — a real, screenshot-caught bug: the model cites historian tags in backticks
+  (e.g. `` `FAC1.UNIT100.CENTRIFUGAL_PUMP_101.VIB_01` ``), which are riddled with underscores used as a word
+  separator, not emphasis. With no backtick handling, the backticks rendered as literal characters and the
+  regex's `_[^_]+_` alternative matched the FIRST stray underscore in one tag name against the NEXT
+  unrelated underscore later in the same paragraph (tag names almost always have an odd underscore count),
+  wrapping everything in between — often most of the paragraph — in a single giant `<em>`, silently eating
+  the underscores out of the tag name in the process. Fixed by (1) matching `` `code` `` spans FIRST so
+  their content (including underscores) is never handed to the bold/italic pattern, rendered as a real
+  `<code>` element (new `.markdown-body code` CSS, monospace + subtle pill background), and (2) dropping
+  bare underscore-italic support entirely — the model is told to use backticks for identifiers and
+  `**bold**` for emphasis, so `_italic_` wasn't providing real value against the risk. `*single-asterisk*`
+  italic is unaffected/still supported.
 - **The server is threaded (`ThreadingHTTPServer`), and that's load-bearing.** It used to be a
   single-threaded `HTTPServer` "on purpose" (mlx-lm's Metal init isn't thread-safe), but that meant an
   open `/api/chat` SSE stream blocked *every* other request: a mid-answer page refresh hung until the

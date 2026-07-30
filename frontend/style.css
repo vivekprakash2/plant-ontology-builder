@@ -689,6 +689,20 @@ textarea:focus-visible {
   color: var(--accent-black);
 }
 
+/* Inline code spans (tag/identifier names like `FAC1.UNIT100...VIB_01`) --
+   monospace + a subtle pill background, matching the tag styling used
+   elsewhere (.source-chip, .timeline-meta), so identifiers read as literal
+   data rather than being run through bold/italic parsing (see
+   appendInlineMarkdown -- code spans are matched first and never
+   re-parsed). */
+.markdown-body code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82em;
+  background: var(--surface-alt);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+
 /* Outlined confidence badge next to the headline (v3 mockup .badge style) --
    the tier only changes the outline/text color, not the shape. */
 .confidence {
