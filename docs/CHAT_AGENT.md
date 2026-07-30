@@ -144,18 +144,20 @@ priority fallback after `get_asset_context`/`get_related_assets`) and `_flatten_
 show up as ordinary evidence cards/timeline entries) — see §3.
 
 **Loop** (`_run_agentic_events`, a generator; `_run_agentic` just drains it for the non-streaming form; max
-`_MAX_AGENT_TURNS = 12` turns — raised 6 → 7 when `write_plan` was added (a mandatory first plan call uses
+`_MAX_AGENT_TURNS = 14` turns — raised 6 → 7 when `write_plan` was added (a mandatory first plan call uses
 part of the budget), then 7 → 12 after live-testing found a genuine 2-hop question (Column dP ← H-101 ←
 E-101 fouling, the S3 cascade) hit "inconclusive within the tool-call budget" despite the model having
 already gathered all the correct evidence — `write_plan` update calls each consume a full turn just like a
 real tool call, and a multi-hop question needs genuinely sequential calls (can't look up H-101's own
 upstream neighbor E-101 until `get_related_assets(H-101)` has already returned), which can't be batched into
-fewer turns the way independent lookups can):
+fewer turns the way independent lookups can — and finally 12 → 14 to pay for the extra sequential lookups
+that prompt rule 4a and the completion gate (§5) ask for on comparison/cascade questions):
 1. Seed `messages` with `_AGENT_SYSTEM_PROMPT` (rules: call `write_plan` first and keep it updated, always
    use tools before answering, never invent facts/IDs/numbers, cite specific evidence, consider
    upstream/downstream assets, use short/long historian windows appropriately, say so explicitly if evidence
    is inconclusive) + the user's question.
-2. Call `provider.chat(messages, tools=TOOL_SCHEMAS, max_tokens=1600)`.
+2. Call `provider.chat(messages, tools=TOOL_SCHEMAS, max_tokens=_ANSWER_MAX_TOKENS)` (2400 — see §5), and
+   pop the `_finish_reason` the provider attaches before the message goes back into `messages`.
 3. For each `tool_call` in the response: if it's `write_plan`, normalize+store the steps
    (`_normalize_plan_steps`) and `yield {"type": "plan", "steps": [...]}` — no KG query, no walk step.
    Otherwise, `yield {"type": "tool_call", "tool", "arguments", "label"}` (a human-readable "doing X" label
@@ -166,9 +168,22 @@ fewer turns the way independent lookups can):
    summary stats, and the raw points would waste a large slice of the token budget for no reasoning benefit),
    and `yield {"type": "tool_result", "tool", "walk_step"}` (`walk_step` from `_walk_step_for_tool_call()` —
    see §3's graph-walk section — or `None` if this call touched no resolvable node).
-4. If a turn's response has no `tool_calls`, it's the final answer: parsed by `_split_agent_response()` into
-   `(headline, root_cause, recommendation)`, yielded as one final `{"type": "final", "answer": AgentAnswer,
-   "plan": [...]}` event.
+4. If a turn's response has no `tool_calls`, it's a **candidate** final answer. Three deterministic
+   interceptors run before it's accepted (all detailed in §5 — each exists because a live retest caught the
+   model doing exactly what it guards against):
+   1. **Completion gate** — if the answer names, or gives up in front of, an asset that
+      `get_related_assets` surfaced but nothing ever queried, the answer is rejected, an instruction is
+      appended, a `{"type": "gate"}` event is yielded, and the loop **`continue`s back into the tool
+      loop** so the agent can go and look. Fires at most once per question.
+   2. **Truncation retry** — `finish_reason == "length"` gets one retry at `_ANSWER_RETRY_MAX_TOKENS`
+      (3600); still truncated ⇒ `truncated=True` plus a visible note in the answer text.
+   3. **Dismissed-trend retry** — if the answer clears an asset whose `get_historian_trend` result carried
+      an unresolved long-window `trend_note`, the model is handed its own warning back for one in-place
+      revision (no tool re-entry; the original answer is kept if the revision isn't clean).
+   These chain rather than compete: (1) fixes "never looked", (3) fixes "looked, was warned, dismissed it
+   anyway". Only after all three does `_split_agent_response()` parse the content into
+   `(headline, root_cause, recommendation)` and one final `{"type": "final", "answer": AgentAnswer,
+   "plan": [...]}` event get yielded.
 5. If the loop exhausts all turns without a final answer, yields a low-confidence "inconclusive within the
    tool-call budget" final event (still includes the full `trace` as evidence).
 
@@ -765,7 +780,7 @@ both the agentic path and `search_evidence` got this evidence for free; only `_d
 describing event behavior. **Live-verified after the fix**: the deterministic answer now reads "Configured
 alarm limits: H=78.5%, deadband 0.1% — a deadband this tight relative to the observed value swing..."; the
 agentic answer independently reached the same conclusion, additionally quoting the config's own
-`recommended_action` text ("suspected mis-set"). Full 13/13 test suite still passes after the graph schema
+`recommended_action` text ("suspected mis-set"). Full test suite still passed after the graph schema
 change.
 
 ## 7. Known limitations / backlog (see also `docs/EXTENDED_SCOPE.md`)

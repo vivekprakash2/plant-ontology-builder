@@ -174,7 +174,7 @@ Verified end-to-end through `build_graph()`/`run_with_graph()` (not just the mod
 real `docs/SCENARIO.md` prose: correctly extracts 6-7 of the 8 ground-truth edges per run (recall varies with
 LLM non-determinism — one verification run got 7/8, tagged `extracted_by="databricks-claude-opus-4-8"`) with
 **zero wrong-asset resolutions** across multiple runs — `V-201`/Reflux Drum is correctly never resolved (it
-has no `_ALIASES` entry) rather than guessed. Full 13/13 regression suite still passes (those tests exercise
+has no `_ALIASES` entry) rather than guessed. Full regression suite still passed (those tests exercise
 Stage 1 resolution only, unaffected by this Stage 2/3 change).
 
 ---

@@ -85,6 +85,17 @@ considered and deliberately decided *against*, so they aren't re-litigated from 
 
 ### Frontend / UI
 
+> **Status update (2026-07-29, later the same day): the two problems below were subsequently worked
+> through and are no longer open.** The visual design was rebuilt against
+> `design_mockups/frontend_redesign_v3.html`, and the explorer's "what is this even for" problem was
+> answered by *scoping* it: the always-on whole-plant force graph was replaced by a bounded **Ontology
+> Overview** (one node per record type, with counts) plus a **Reasoning Walk** that shows only the subgraph
+> a given answer actually touched, revealed step by step as the agent works. See `docs/CHAT_AGENT.md` §4 for
+> the current design and the full list of subsequent fixes (deterministic replay layout, hover-vs-pinned
+> inspector on both tabs, contextual legend, boundary-trimmed edges, light-mode default, provenance pill
+> row, wordmark-as-home-button). The historical account below is kept because it records *why* the original
+> design was rejected, which is still the useful part.
+
 - **Redesigned once already (2026-07-29), but visuals/explorer usefulness are still open problems.**
   Original state: a fixed single-result dashboard (preset questions + summary card + timeline + evidence +
   relationship graph) modeled on `ui-prototype/`, felt too restrictive for open-ended questions — it
@@ -135,6 +146,20 @@ neither built:
 
 ## Implemented (moved out of "Open items")
 
+- **Conversation history for follow-up questions** — `/api/chat` accepts an optional `history` array (last
+  4 turns, validated + truncated by `agent._history_messages()`), so agentic follow-ups like "what work
+  orders were involved?" resolve pronouns against the previous turn. Live-verified: the follow-up surfaced
+  WO-4471 without the question naming P-101. The deterministic fallback stays stateless per question.
+  See `docs/CHAT_AGENT.md` §3.
+- **Threaded HTTP server.** `ThreadingHTTPServer` replaced the single-threaded `HTTPServer` (it drops back
+  to single-threaded only for the opt-in mlx provider). Previously an in-flight `/api/chat` SSE stream
+  blocked every other request, so a mid-answer page refresh hung for the rest of the answer — 9.8s measured
+  on the fast path, 30–90s on the agentic one, which reads as a crash. Now ~0.2s.
+- **Three deterministic guards on the agentic answer** (§5 of `docs/CHAT_AGENT.md`), each added after a live
+  retest caught the failure it prevents: dual-window `get_historian_trend` (a signal that rose then
+  plateaued reads "stable" over 48h — the model no longer gets to see only the misleading window), the
+  completion gate (can't conclude about a related asset it never queried), and truncation detection
+  (`finish_reason == "length"` → retry, then flag rather than silently render a half-sentence).
 - **On-disk cache for entities + graph** (`KnowledgeGraph.from_node_link_json()`, `pipeline.load_from_cache()`
   / `load_or_build()`, wired into `server.py` via `FORCE_REBUILD`) — was discussed as "how do we want to store
   the ontology output" / "should we cache it", implemented and verified (~0.03s cached load vs ~0.45s full
@@ -161,7 +186,7 @@ neither built:
   (fallback asset resolution for the UI panel) and `_flatten_evidence()` (so their matches render as normal
   evidence cards/timeline entries) — see `docs/CHAT_AGENT.md` §1b/§3. Verified end-to-end against the real
   loaded graph (30 active alarms / 2 open work orders / 3 health events returned, correctly asset-attributed)
-  and the full 13/13 test suite still passes.
+  and the full test suite still passed.
 - **Alarm limit/deadband configuration (`am_config.json`'s `limits`/`deadband` fields) is now ingested and
   exposed.** Found 2026-07-29 while checking tool coverage against `docs/TEAM_HANDBOOK.md` §7 Q5 (TK-201
   alarm flood) — previously dropped on the floor entirely (not in Stage 1 profiling, not attached to any
@@ -174,7 +199,7 @@ neither built:
   limit/deadband as hard evidence. Live-verified after the fix: TK-201's answer now cites "H=78.5%, deadband
   0.1%" against an observed ~0.3% swing, both deterministically and agentically (the agentic answer also
   quoted the config's own `recommended_action` text, "suspected mis-set"). See `docs/ONTOLOGY.md` §3b and
-  `docs/CHAT_AGENT.md` §6 for the full story. Full 13/13 test suite still passes.
+  `docs/CHAT_AGENT.md` §6 for the full story. Full test suite still passed.
 - **Animated graph walk** (2026-07-29): `agent.py`'s `build_graph_walk()` (+ `_walk_step_for_tool_call()`)
   turns the answer's already-collected evidence/tool-call trace into an ordered `[{label, node_ids}, ...]`
   sequence (one step per tool call in agentic mode, exact call order; one step per gathered evidence item in
